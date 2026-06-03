@@ -77,19 +77,19 @@ impl WalkDirEntryExt for walkdir::DirEntry {
 }
 
 pub trait AppHandleExt {
-    fn get_config(&self) -> State<RwLock<Config>>;
-    fn get_jm_client(&self) -> State<JmClient>;
-    fn get_download_manager(&self) -> State<DownloadManager>;
+    fn get_config(&self) -> State<'_, RwLock<Config>>;
+    fn get_jm_client(&self) -> State<'_, JmClient>;
+    fn get_download_manager(&self) -> State<'_, DownloadManager>;
 }
 
 impl AppHandleExt for tauri::AppHandle {
-    fn get_config(&self) -> State<RwLock<Config>> {
+    fn get_config(&self) -> State<'_, RwLock<Config>> {
         self.state::<RwLock<Config>>()
     }
-    fn get_jm_client(&self) -> State<JmClient> {
+    fn get_jm_client(&self) -> State<'_, JmClient> {
         self.state::<JmClient>()
     }
-    fn get_download_manager(&self) -> State<DownloadManager> {
+    fn get_download_manager(&self) -> State<'_, DownloadManager> {
         self.state::<DownloadManager>()
     }
 }
