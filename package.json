@@ -22,7 +22,8 @@
     "unocss": "^0.63.0",
     "unplugin-auto-import": "^0.18.3",
     "unplugin-vue-components": "^0.27.4",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "z-vue-scan": "^0.0.37"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
