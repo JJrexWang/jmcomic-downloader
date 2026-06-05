@@ -4,6 +4,7 @@ import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { ChapterInfo, commands, DownloadTaskState } from '../bindings.ts'
 import { useStore } from '../store.ts'
 import { PhFolderOpen } from '@phosphor-icons/vue'
+import { NButton, NCheckbox, NCheckboxGroup, NDropdown, NEmpty } from 'naive-ui'
 import IconButton from '../components/IconButton.vue'
 
 const store = useStore()

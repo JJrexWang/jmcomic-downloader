@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { LogEvent, LogLevel, events, commands } from '../bindings.ts'
-import { useNotification } from 'naive-ui'
 import { onMounted, ref, watch, computed } from 'vue'
 import { appDataDir } from '@tauri-apps/api/path'
 import { path } from '@tauri-apps/api'
 import { useStore } from '../store.ts'
-import { darkTheme } from 'naive-ui'
+import {
+  darkTheme,
+  NButton,
+  NCheckbox,
+  NConfigProvider,
+  NDialog,
+  NInput,
+  NInputGroup,
+  NModal,
+  NSelect,
+  NVirtualList,
+  useNotification,
+} from 'naive-ui'
 
 type LogRecord = LogEvent & { id: number; formatedLog: string }
 

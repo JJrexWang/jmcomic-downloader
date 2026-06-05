@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PhCircleNotch, PhFolderOpen } from '@phosphor-icons/vue'
+import { NIcon, NProgress } from 'naive-ui'
 import { ProgressData } from './ExportProgresses.vue'
 import { commands } from '../../../bindings.ts'
 import IconButton from '../../../components/IconButton.vue'

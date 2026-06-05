@@ -2,6 +2,7 @@
 import { Comic, commands } from '../../../bindings.ts'
 import { useStore } from '../../../store.ts'
 import { PhFilePdf, PhFileZip, PhFolderOpen } from '@phosphor-icons/vue'
+import { NCheckbox } from 'naive-ui'
 import IconButton from '../../../components/IconButton.vue'
 
 const store = useStore()

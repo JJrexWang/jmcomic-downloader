@@ -4,7 +4,21 @@ import { ref, watch } from 'vue'
 import { path } from '@tauri-apps/api'
 import { appDataDir } from '@tauri-apps/api/path'
 import { useStore } from '../store.ts'
-import { useMessage } from 'naive-ui'
+import {
+  NButton,
+  NCheckbox,
+  NDialog,
+  NInput,
+  NInputGroup,
+  NInputGroupLabel,
+  NInputNumber,
+  NModal,
+  NRadio,
+  NRadioButton,
+  NRadioGroup,
+  NTooltip,
+  useMessage,
+} from 'naive-ui'
 
 const store = useStore()
 
@@ -190,7 +204,7 @@ async function showConfigInFileManager() {
         </n-input-group>
 
         <span class="font-bold mt-2">下载目录格式</span>
-        <n-tooltip placement="top" trigger="hover" width="550">
+        <n-tooltip placement="top" trigger="hover" :width="550">
           <div>
             可以用斜杠
             <span class="rounded bg-gray-500 px-1 text-white">/</span>

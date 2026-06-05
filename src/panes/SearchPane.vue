@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { commands, SearchSort } from '../bindings.ts'
-import { useMessage } from 'naive-ui'
+import { NButton, NIcon, NInputGroup, NPagination, NSelect, SelectProps, useMessage } from 'naive-ui'
 import ComicCard from '../components/ComicCard.vue'
 import FloatLabelInput from '../components/FloatLabelInput.vue'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
-import { SelectProps } from 'naive-ui'
 import { useStore } from '../store.ts'
 
 const store = useStore()
