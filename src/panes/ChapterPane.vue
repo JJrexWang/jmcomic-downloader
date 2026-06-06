@@ -1,96 +1,31 @@
-<script setup lang="ts">
-import { SelectionArea, SelectionEvent } from '@viselect/vue'
-import { computed, nextTick, ref, watch, watchEffect } from 'vue'
+<script setup lang="tsx">
+import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselect/vue'
+import { computed, defineComponent, nextTick, PropType, ref, watch, watchEffect, useTemplateRef } from 'vue'
 import { ChapterInfo, commands, DownloadTaskState } from '../bindings.ts'
 import { useStore } from '../store.ts'
 import { PhFolderOpen } from '@phosphor-icons/vue'
-import { NButton, NCheckbox, NCheckboxGroup, NDropdown, NEmpty } from 'naive-ui'
+import { DropdownOption, NButton, NCheckbox, NDropdown, NEmpty } from 'naive-ui'
 import IconButton from '../components/IconButton.vue'
 
 const store = useStore()
 
-const dropdownX = ref<number>(0)
-const dropdownY = ref<number>(0)
-const showDropdown = ref<boolean>(false)
-const dropdownOptions = [
-  {
-    label: '勾选',
-    key: 'check',
-    props: {
-      onClick: () => {
-        // 只有未勾选的才会被勾选
-        ;[...selectedIds.value]
-          .filter((id) => !checkedIds.value.includes(id))
-          .forEach((id) => checkedIds.value.push(id))
-        showDropdown.value = false
-      },
-    },
-  },
-  {
-    label: '取消勾选',
-    key: 'uncheck',
-    props: {
-      onClick: () => {
-        checkedIds.value = checkedIds.value.filter((id) => !selectedIds.value.has(id))
-        showDropdown.value = false
-      },
-    },
-  },
-  {
-    label: '全选',
-    key: 'check all',
-    props: {
-      onClick: () => {
-        // 只有未锁定的才会被勾选
-        store.pickedComic?.chapterInfos
-          ?.filter((c) => c.isDownloaded !== true && !checkedIds.value.includes(c.chapterId))
-          .forEach((c) => checkedIds.value.push(c.chapterId))
-        showDropdown.value = false
-      },
-    },
-  },
-  {
-    label: '取消全选',
-    key: 'uncheck all',
-    props: {
-      onClick: () => {
-        checkedIds.value.length = 0
-        showDropdown.value = false
-      },
-    },
-  },
-]
-const checkedIds = ref<number[]>([])
-const selectedIds = ref<Set<number>>(new Set())
-const selectionAreaRef = ref<InstanceType<typeof SelectionArea>>()
-
 type State = DownloadTaskState | 'Idle'
-const chapterInfos = computed<(ChapterInfo & { state: State })[]>(() => {
-  const pickedComic = store.pickedComic
 
-  if (pickedComic === undefined) {
-    return []
-  }
+const selectionOptions: PartialSelectionOptions = {
+  selectables: '.selectable',
+  features: { deselectOnBlur: true },
+  boundaries: '.chapter-pane-selection-container',
+}
 
-  return pickedComic.chapterInfos.map((chapterInfo) => {
-    const progressData = store.progresses.get(chapterInfo.chapterId)
-    if (progressData === undefined) {
-      return {
-        ...chapterInfo,
-        state: 'Idle',
-      }
-    }
-    return {
-      ...chapterInfo,
-      state: progressData.state,
-    }
-  })
-})
+const chapterInfos = computed<ChapterInfo[]>(() => store.pickedComic?.chapterInfos ?? [])
+const checkedIds = ref<Set<number>>(new Set())
+const selectedIds = ref<Set<number>>(new Set())
+const selectionAreaRef = useTemplateRef('selectionAreaRef')
 
 watch(
   () => store.pickedComic,
   () => {
-    checkedIds.value = []
+    checkedIds.value.clear()
     selectedIds.value.clear()
     selectionAreaRef.value?.selection?.clearSelection()
   },
@@ -100,12 +35,22 @@ watchEffect(() => {
   if (store.pickedComic === undefined) {
     return
   }
-  // 只保留未下载的章节
-  // TODO: 改用set效率更高
-  const notDownloadedChapterIds = chapterInfos.value
-    .filter((c) => c.isDownloaded !== true && !isDownloading(c.state))
-    .map((c) => c.chapterId)
-  checkedIds.value = checkedIds.value.filter((id) => notDownloadedChapterIds.includes(id))
+
+  const selectableChapterIds = new Set(
+    chapterInfos.value.filter((chapter) => isChapterSelectable(chapter)).map((chapter) => chapter.chapterId),
+  )
+
+  for (const id of checkedIds.value) {
+    if (!selectableChapterIds.has(id)) {
+      checkedIds.value.delete(id)
+    }
+  }
+
+  for (const id of selectedIds.value) {
+    if (!selectableChapterIds.has(id)) {
+      selectedIds.value.delete(id)
+    }
+  }
 })
 
 function extractIds(elements: Element[]): number[] {
@@ -113,13 +58,7 @@ function extractIds(elements: Element[]): number[] {
     .map((element) => element.getAttribute('data-key'))
     .filter(Boolean)
     .map(Number)
-    .filter((id) => {
-      const chapterInfo = store.pickedComic?.chapterInfos.find((c) => c.chapterId === id)
-      if (chapterInfo === undefined) {
-        return false
-      }
-      return chapterInfo.isDownloaded !== true
-    })
+    .filter((id) => chapterInfos.value.find((chapter) => chapter.chapterId === id) !== undefined)
 }
 
 function unselectAll({ event, selection }: SelectionEvent) {
@@ -138,10 +77,58 @@ function updateSelectedIds({
   extractIds(removed).forEach((id) => selectedIds.value.delete(id))
 }
 
-async function onContextMenu(e: MouseEvent) {
-  showDropdown.value = false
+const dropdownX = ref<number>(0)
+const dropdownY = ref<number>(0)
+const dropdownShowing = ref<boolean>(false)
+const dropdownOptions: DropdownOption[] = [
+  {
+    label: '勾选',
+    key: 'check',
+    props: {
+      onClick: () => {
+        // 只有未勾选的才会被勾选
+        selectedIds.value.forEach((id) => checkedIds.value.add(id))
+        dropdownShowing.value = false
+      },
+    },
+  },
+  {
+    label: '取消勾选',
+    key: 'uncheck',
+    props: {
+      onClick: () => {
+        selectedIds.value.forEach((id) => checkedIds.value.delete(id))
+        dropdownShowing.value = false
+      },
+    },
+  },
+  {
+    label: '全选',
+    key: 'check all',
+    props: {
+      onClick: () => {
+        chapterInfos.value
+          .filter((chapter) => isChapterSelectable(chapter))
+          .forEach((chapter) => checkedIds.value.add(chapter.chapterId))
+        dropdownShowing.value = false
+      },
+    },
+  },
+  {
+    label: '取消全选',
+    key: 'uncheck all',
+    props: {
+      onClick: () => {
+        checkedIds.value.clear()
+        dropdownShowing.value = false
+      },
+    },
+  },
+]
+async function showDropdown(e: MouseEvent) {
+  dropdownShowing.value = false
   await nextTick()
-  showDropdown.value = true
+  dropdownShowing.value = true
   dropdownX.value = e.clientX
   dropdownY.value = e.clientY
 }
@@ -151,8 +138,8 @@ async function downloadChapters() {
     return
   }
   // 下载勾选的章节
-  const chapterIdsToDownload = store.pickedComic.chapterInfos
-    .filter((c) => c.isDownloaded !== true && checkedIds.value.includes(c.chapterId))
+  const chapterIdsToDownload = chapterInfos.value
+    .filter((chapter) => isChapterSelectable(chapter) && checkedIds.value.has(chapter.chapterId))
     .map((c) => c.chapterId)
   for (const chapterId of chapterIdsToDownload) {
     // 创建下载任务
@@ -173,7 +160,6 @@ async function refreshChapters() {
     return
   }
   store.pickedComic = result.data
-  // TODO: 如果pickedComic已下载，则更新元数据
 }
 
 async function showComicDownloadDirInFileManager() {
@@ -193,65 +179,104 @@ async function showComicDownloadDirInFileManager() {
   }
 }
 
-function isDownloading(state: State) {
+function getChapterState(chapterInfo: ChapterInfo): State {
+  return store.progresses.get(chapterInfo.chapterId)?.state ?? 'Idle'
+}
+
+function isDownloadingChapter(chapter: ChapterInfo) {
+  const state = getChapterState(chapter)
   return state === 'Pending' || state === 'Downloading' || state === 'Paused'
 }
+
+function isDownloadedChapter(chapterInfo: ChapterInfo) {
+  return chapterInfo.isDownloaded === true
+}
+
+function isChapterSelectable(chapterInfo: ChapterInfo) {
+  return !isDownloadedChapter(chapterInfo) && !isDownloadingChapter(chapterInfo)
+}
+
+const ChapterCheckbox = defineComponent({
+  name: 'ChapterCheckbox',
+  props: {
+    chapter: {
+      type: Object as PropType<ChapterInfo>,
+      required: true,
+    },
+  },
+  setup: (props) => {
+    return () => (
+      <NCheckbox
+        data-key={props.chapter.chapterId}
+        class={[
+          'hover:bg-gray-200!',
+          {
+            selectable: isChapterSelectable(props.chapter),
+            selected: selectedIds.value.has(props.chapter.chapterId),
+            downloaded: isDownloadedChapter(props.chapter),
+            downloading: !isDownloadedChapter(props.chapter) && isDownloadingChapter(props.chapter),
+          },
+        ]}
+        checked={checkedIds.value.has(props.chapter.chapterId)}
+        onUpdate:checked={(checked: boolean) => {
+          if (checked) {
+            checkedIds.value.add(props.chapter.chapterId)
+          } else {
+            checkedIds.value.delete(props.chapter.chapterId)
+          }
+        }}
+        label={props.chapter.chapterTitle}
+        disabled={!isChapterSelectable(props.chapter)}
+      />
+    )
+  },
+})
 </script>
 
 <template>
   <div class="h-full flex flex-col gap-2 box-border">
-    <div v-if="store.pickedComic !== undefined" class="flex items-center select-none pt-2 gap-1 px-2">
-      左键拖动进行框选，右键打开菜单
-      <n-button class="ml-auto" size="small" @click="refreshChapters">刷新</n-button>
-      <n-button size="small" type="primary" @click="downloadChapters">下载勾选章节</n-button>
-    </div>
-    <n-empty v-if="store.pickedComic === undefined" description="请先进行漫画搜索"></n-empty>
-    <SelectionArea
-      v-else
-      ref="selectionAreaRef"
-      class="selection-container flex flex-col flex-1 px-2 pt-0 overflow-auto"
-      :options="{ selectables: '.selectable', features: { deselectOnBlur: true } }"
-      @contextmenu="onContextMenu"
-      @move="updateSelectedIds"
-      @start="unselectAll">
-      <n-checkbox-group v-model:value="checkedIds" class="grid grid-cols-3 gap-1.5">
-        <n-checkbox
-          v-for="{ chapterId, chapterTitle, isDownloaded, state } in chapterInfos"
-          :key="chapterId"
-          :data-key="chapterId"
-          class="selectable hover:bg-gray-200!"
-          :value="chapterId"
-          :label="chapterTitle"
-          :disabled="isDownloaded === true || isDownloading(state)"
-          :class="{
-            selected: selectedIds.has(chapterId),
-            downloaded: isDownloaded,
-            downloading: !isDownloaded && isDownloading(state),
-          }" />
-      </n-checkbox-group>
-    </SelectionArea>
+    <n-empty v-if="store.pickedComic === undefined" description="请先进行漫画搜索" />
+    <template v-else>
+      <div class="flex items-center select-none pt-2 gap-1 px-2">
+        左键拖动进行框选，右键打开菜单
+        <n-button class="ml-auto" size="small" @click="refreshChapters">刷新</n-button>
+        <n-button size="small" type="primary" @click="downloadChapters">下载勾选章节</n-button>
+      </div>
 
-    <div v-if="store.pickedComic !== undefined" class="flex p-2 pt-0">
-      <img
-        class="w-24 mr-4 object-cover"
-        :src="`https://cdn-msp3.18comic.vip/media/albums/${store.pickedComic.id}_3x4.jpg`"
-        alt=""
-        referrerpolicy="no-referrer" />
-      <div class="flex flex-col w-full justify-between">
-        <div class="flex flex-col">
-          <span class="font-bold text-lg line-clamp-2">{{ store.pickedComic.name }}</span>
-          <span class="text-red">作者：{{ store.pickedComic.author }}</span>
-          <span class="text-gray">标签：{{ store.pickedComic.tags }}</span>
-          <IconButton
-            v-if="store.pickedComic.isDownloaded"
-            class="w-fit"
-            title="打开下载目录"
-            @click="showComicDownloadDirInFileManager">
-            <PhFolderOpen :size="24" />
-          </IconButton>
+      <SelectionArea
+        ref="selectionAreaRef"
+        :options="selectionOptions"
+        @move="updateSelectedIds"
+        @start="unselectAll" />
+
+      <div class="chapter-pane-selection-container flex-1 px-2 pt-0 overflow-auto" @contextmenu="showDropdown">
+        <div class="grid grid-cols-3 gap-1.5">
+          <ChapterCheckbox v-for="chapter in chapterInfos" :key="chapter.chapterId" :chapter="chapter" />
         </div>
       </div>
-    </div>
+
+      <div class="flex p-2 pt-0">
+        <img
+          class="w-24 mr-4 object-cover"
+          :src="`https://cdn-msp3.18comic.vip/media/albums/${store.pickedComic.id}_3x4.jpg`"
+          alt=""
+          referrerpolicy="no-referrer" />
+        <div class="flex flex-col w-full justify-between">
+          <div class="flex flex-col">
+            <span class="font-bold text-lg line-clamp-2">{{ store.pickedComic.name }}</span>
+            <span class="text-red">作者：{{ store.pickedComic.author }}</span>
+            <span class="text-gray">标签：{{ store.pickedComic.tags }}</span>
+            <IconButton
+              v-if="store.pickedComic.isDownloaded"
+              class="w-fit"
+              title="打开下载目录"
+              @click="showComicDownloadDirInFileManager">
+              <PhFolderOpen :size="24" />
+            </IconButton>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <n-dropdown
       placement="bottom-start"
@@ -259,25 +284,25 @@ function isDownloading(state: State) {
       :x="dropdownX"
       :y="dropdownY"
       :options="dropdownOptions"
-      :show="showDropdown"
-      :on-clickoutside="() => (showDropdown = false)" />
+      :show="dropdownShowing"
+      :on-clickoutside="() => (dropdownShowing = false)" />
   </div>
 </template>
 
 <style scoped>
-.selection-container {
+.chapter-pane-selection-container {
   @apply select-none overflow-auto;
 }
 
-.selection-container .selected {
-  @apply bg-[rgb(204,232,255)];
+.chapter-pane-selection-container .selected {
+  @apply bg-[rgb(204,232,255)] !important;
 }
 
-.selection-container .downloaded {
+.chapter-pane-selection-container .downloaded {
   @apply bg-[rgba(24,160,88,0.16)];
 }
 
-.selection-container .downloading {
+.chapter-pane-selection-container .downloading {
   @apply bg-[rgba(114,46,209,0.16)];
 }
 
