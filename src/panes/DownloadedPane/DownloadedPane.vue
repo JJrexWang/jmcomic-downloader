@@ -1,21 +1,26 @@
 <script setup lang="tsx">
 import { Comic, commands } from '../../bindings.ts'
-import { computed, nextTick, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, ref, watch, watchEffect, useTemplateRef } from 'vue'
 import DownloadedComicCard from './components/DownloadedComicCard.vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { PhFolderOpen } from '@phosphor-icons/vue'
 import { useStore } from '../../store.ts'
 import { DropdownOption, NButton, NDropdown, NIcon, NInput, NInputGroup, NInputGroupLabel, NPagination } from 'naive-ui'
-import { SelectionArea, SelectionEvent } from '@viselect/vue'
+import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselect/vue'
 import { PhChecks, PhCheck, PhX } from '@phosphor-icons/vue'
 import UpdateDownloadedComicsButton from './components/UpdateDownloadedComicsButton.vue'
 
 const store = useStore()
 
+const selectionOptions: PartialSelectionOptions = {
+  selectables: '.selectable',
+  features: { deselectOnBlur: true },
+  boundaries: '.downloaded-pane-selection-container',
+}
 const selectedIds = ref<Set<number>>(new Set())
 const checkedIds = ref<Set<number>>(new Set())
 const { dropdownX, dropdownY, dropdownShowing, dropdownOptions, showDropdown } = useDropdown()
-const selectionAreaRef = ref<InstanceType<typeof SelectionArea>>()
+const selectionAreaRef = useTemplateRef('selectionAreaRef')
 
 const PAGE_SIZE = 20
 // 已下载的漫画
@@ -255,13 +260,10 @@ function useDropdown() {
       <n-button class="ml-auto" type="primary" size="small" @click="exportCbz">导出cbz</n-button>
       <n-button type="primary" size="small" @click="exportPdf">导出pdf</n-button>
     </div>
-    <SelectionArea
-      class="flex flex-col overflow-auto box-border px-2 selection-container mb-2"
-      ref="selectionAreaRef"
-      :options="{ selectables: '.selectable', features: { deselectOnBlur: true } }"
-      @contextmenu="showDropdown"
-      @move="updateSelectedIds"
-      @start="unselectAll">
+    <SelectionArea ref="selectionAreaRef" :options="selectionOptions" @move="updateSelectedIds" @start="unselectAll" />
+    <div
+      class="flex flex-col overflow-auto box-border px-2 downloaded-pane-selection-container mb-2"
+      @contextmenu="showDropdown">
       <DownloadedComicCard
         v-for="comic in currentPageComics"
         :key="comic.id"
@@ -271,7 +273,7 @@ function useDropdown() {
         :checkbox-checked="checkboxChecked"
         :handle-checkbox-click="handleCheckboxClick"
         :handle-context-menu="handleContextMenu" />
-    </SelectionArea>
+    </div>
 
     <n-pagination
       class="box-border p-2 pt-0 mt-auto"
@@ -291,11 +293,11 @@ function useDropdown() {
 </template>
 
 <style scoped>
-.selection-container {
+.downloaded-pane-selection-container {
   @apply select-none overflow-auto;
 }
 
-.selection-container .selected {
+.downloaded-pane-selection-container .selected {
   @apply bg-[rgb(204,232,255)];
 }
 </style>
