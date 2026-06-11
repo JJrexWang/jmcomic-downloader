@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
-import { CurrentTabName, ProgressData } from './types.ts'
+import { CurrentTabName, ProgressData, ProgressesPaneTabName } from './types.ts'
 import { Comic, Config, GetFavoriteResult, GetUserProfileRespData, GetWeeklyResult, SearchResult } from './bindings.ts'
 import { ref } from 'vue'
-import { ProgressesPaneTabName } from './panes/ProgressesPane/ProgressesPane.vue'
 
 export const useStore = defineStore('store', () => {
   const config = ref<Config>()

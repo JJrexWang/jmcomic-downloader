@@ -1,7 +1,7 @@
 use anyhow::Context;
 use events::{
-    DownloadAllFavoritesEvent, DownloadSleepingEvent, DownloadSpeedEvent, DownloadTaskEvent,
-    ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+    DownloadAllFavoritesEvent, DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
+    UpdateDownloadedComicsEvent,
 };
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
@@ -9,12 +9,12 @@ use tauri::{Manager, Wry};
 // TODO: 用prelude来消除警告
 use crate::commands::*;
 use crate::config::Config;
-use crate::download_manager::DownloadManager;
+use crate::downloader::download_manager::DownloadManager;
 use crate::jm_client::JmClient;
 
 mod commands;
 mod config;
-mod download_manager;
+mod downloader;
 mod errors;
 mod events;
 mod export;
@@ -47,7 +47,7 @@ pub fn run() {
             create_download_task,
             pause_download_task,
             resume_download_task,
-            cancel_download_task,
+            delete_download_task,
             download_comic,
             download_all_favorites,
             update_downloaded_comics,
@@ -63,9 +63,7 @@ pub fn run() {
             get_synced_comic_in_weekly,
         ])
         .events(tauri_specta::collect_events![
-            DownloadSpeedEvent,
-            DownloadSleepingEvent,
-            DownloadTaskEvent,
+            DownloadEvent,
             DownloadAllFavoritesEvent,
             UpdateDownloadedComicsEvent,
             ExportCbzEvent,
@@ -107,7 +105,7 @@ pub fn run() {
             let jm_client = JmClient::new(app.handle().clone());
             app.manage(jm_client);
 
-            let download_manager = DownloadManager::new(app.handle().clone());
+            let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
 
             logger::init(app.handle())?;

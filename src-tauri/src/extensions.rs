@@ -1,7 +1,7 @@
 use parking_lot::RwLock;
 use tauri::{Manager, State};
 
-use crate::{config::Config, download_manager::DownloadManager, jm_client::JmClient};
+use crate::{config::Config, downloader::download_manager::DownloadManager, jm_client::JmClient};
 
 pub trait AnyhowErrorToStringChain {
     /// 将 `anyhow::Error` 转换为chain格式

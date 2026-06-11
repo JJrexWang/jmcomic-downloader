@@ -28,7 +28,7 @@ const selectableRefs = useTemplateRef('selectableRefs')
 
 const uncompletedProgresses = computed<[number, ProgressData][]>(() =>
   Array.from(store.progresses.entries())
-    .filter(([, { state }]) => state !== 'Completed' && state !== 'Cancelled')
+    .filter(([, { state }]) => state !== 'Completed')
     .sort((a, b) => b[1].totalImgCount - a[1].totalImgCount),
 )
 
@@ -104,19 +104,6 @@ const dropdownOptions: DropdownOption[] = [
     props: {
       onClick: () => {
         selectedIds.value.forEach(async (chapterId) => {
-          const progressData = store.progresses.get(chapterId)
-          if (progressData === undefined) {
-            return
-          }
-          const { state, comic } = progressData
-          if (state === 'Cancelled' || state === 'Completed' || state === 'Failed') {
-            const result = await commands.createDownloadTask(comic, chapterId)
-            if (result.status === 'error') {
-              console.error(result.error)
-            }
-            return
-          }
-
           const result = await commands.resumeDownloadTask(chapterId)
           if (result.status === 'error') {
             console.error(result.error)
@@ -137,6 +124,15 @@ const dropdownOptions: DropdownOption[] = [
     props: {
       onClick: () => {
         selectedIds.value.forEach(async (chapterId) => {
+          const progressData = store.progresses.get(chapterId)
+          if (progressData === undefined) {
+            return
+          }
+          const { state } = progressData
+          if (state === 'Completed' || state === 'Failed') {
+            return
+          }
+
           const result = await commands.pauseDownloadTask(chapterId)
           if (result.status === 'error') {
             console.error(result.error)
@@ -147,7 +143,7 @@ const dropdownOptions: DropdownOption[] = [
     },
   },
   {
-    label: '取消',
+    label: '删除',
     key: 'cancel',
     icon: () => (
       <NIcon size="20">
@@ -157,7 +153,7 @@ const dropdownOptions: DropdownOption[] = [
     props: {
       onClick: () => {
         selectedIds.value.forEach(async (chapterId) => {
-          const result = await commands.cancelDownloadTask(chapterId)
+          const result = await commands.deleteDownloadTask(chapterId)
           if (result.status === 'error') {
             console.error(result.error)
           }
@@ -242,8 +238,6 @@ const UncompletedProgress = defineComponent({
         return 'text-red-500'
       } else if (props.p.state === 'Completed') {
         return 'text-green-500'
-      } else if (props.p.state === 'Cancelled') {
-        return 'text-stone-500'
       }
 
       return ''

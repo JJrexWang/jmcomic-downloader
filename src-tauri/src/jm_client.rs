@@ -18,7 +18,6 @@ use reqwest_retry::{Jitter, RetryTransientMiddleware};
 use serde_json::json;
 use tauri::AppHandle;
 
-use crate::download_manager::IMAGE_DOMAIN;
 use crate::extensions::{AnyhowErrorToStringChain, AppHandleExt};
 use crate::responses::{
     GetChapterRespData, GetComicRespData, GetFavoriteRespData, GetUserProfileRespData,
@@ -27,6 +26,8 @@ use crate::responses::{
 };
 use crate::types::{FavoriteSort, ProxyMode, SearchSort};
 use crate::utils;
+
+pub const IMAGE_DOMAIN: &str = "cdn-msp2.jmapiproxy2.cc";
 
 const APP_TOKEN_SECRET: &str = "18comicAPP";
 const APP_TOKEN_SECRET_2: &str = "18comicAPPContent";

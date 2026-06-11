@@ -15,7 +15,7 @@ use crate::{
     utils,
 };
 
-use super::ChapterInfo;
+use super::{ChapterInfo, DirFmtParams};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -206,6 +206,24 @@ impl Comic {
         Ok(comic_export_dir)
     }
 
+    pub fn ensure_download_dir_fields(&mut self, app: &AppHandle) -> anyhow::Result<()> {
+        if self.has_download_dir_fields() {
+            return Ok(());
+        }
+
+        self.update_download_dir_fields_by_fmt(app)
+    }
+
+    pub fn has_download_dir_fields(&self) -> bool {
+        let comic_download_dir_ready = self.comic_download_dir.is_some();
+        let chapter_download_dir_ready = self
+            .chapter_infos
+            .iter()
+            .all(|chapter| chapter.chapter_download_dir.is_some());
+
+        comic_download_dir_ready && chapter_download_dir_ready
+    }
+
     pub fn save_comic_metadata(&self) -> anyhow::Result<()> {
         let mut comic = self.clone();
         // 将漫画的is_downloaded和comic_download_dir字段设置为None
@@ -245,6 +263,53 @@ impl Comic {
         let cover_path = comic_download_dir.join("cover.jpg");
 
         Ok(cover_path)
+    }
+
+    pub fn update_download_dir_fields_by_fmt(&mut self, app: &AppHandle) -> anyhow::Result<()> {
+        if self.chapter_infos.is_empty() {
+            return Err(anyhow!("没有章节信息，无法更新下载目录字段"));
+        }
+
+        let author = self.author.join(", ");
+        let mut first_chapter_download_dir = None;
+
+        for chapter_info in &mut self.chapter_infos {
+            let chapter_title = &chapter_info.chapter_title;
+
+            let dir_fmt_params = DirFmtParams {
+                comic_id: self.id,
+                comic_title: self.name.clone(),
+                author: author.clone(),
+                chapter_id: chapter_info.chapter_id,
+                chapter_title: chapter_info.chapter_title.clone(),
+                order: chapter_info.order,
+            };
+
+            let chapter_download_dir =
+                ChapterInfo::get_chapter_download_dir_by_fmt(app, &dir_fmt_params)
+                    .context(format!("章节`{chapter_title}`根据fmt获取章节下载目录失败"))?;
+
+            if first_chapter_download_dir.is_none() {
+                first_chapter_download_dir = Some(chapter_download_dir.clone());
+            }
+
+            chapter_info.chapter_download_dir = Some(chapter_download_dir);
+        }
+
+        let Some(first_chapter_download_dir) = first_chapter_download_dir else {
+            return Err(anyhow!(
+                "处理完所有章节后first_chapter_download_dir仍然为None"
+            ));
+        };
+
+        let comic_download_dir = first_chapter_download_dir.parent().context(format!(
+            "第一个章节下载目录`{}`没有父目录",
+            first_chapter_download_dir.display()
+        ))?;
+
+        self.comic_download_dir = Some(comic_download_dir.to_path_buf());
+
+        Ok(())
     }
 
     fn update_chapter_infos_fields(&mut self) -> anyhow::Result<()> {
