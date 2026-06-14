@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context};
+use eyre::{eyre, WrapErr};
 use parking_lot::RwLock;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
@@ -17,7 +17,7 @@ use crate::{
     config::Config,
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
     events::DownloadEvent,
-    extensions::AnyhowErrorToStringChain,
+    extensions::ReportToStringChain,
     types::Comic,
 };
 
@@ -66,7 +66,7 @@ impl DownloadManager {
         }
     }
 
-    pub fn create_download_task(&self, comic: Comic, chapter_id: i64) -> anyhow::Result<()> {
+    pub fn create_download_task(&self, comic: Comic, chapter_id: i64) -> eyre::Result<()> {
         use DownloadTaskState::{Downloading, Paused, Pending};
 
         let comic_title = comic.name.clone();
@@ -75,7 +75,7 @@ impl DownloadManager {
         if let Some(task) = tasks.get(&chapter_id) {
             let state = *task.state_sender.borrow();
             if matches!(state, Pending | Downloading | Paused) {
-                return Err(anyhow!("章节ID为`{chapter_id}`的下载任务已存在"));
+                return Err(eyre!("章节ID为`{chapter_id}`的下载任务已存在"));
             }
         }
 
@@ -83,7 +83,7 @@ impl DownloadManager {
             if let Err(err) = task
                 .delete_sender
                 .send(())
-                .context(format!("章节ID为`{chapter_id}`的旧下载任务删除失败"))
+                .wrap_err(format!("章节ID为`{chapter_id}`的旧下载任务删除失败"))
             {
                 let err_title =
                     format!("`{comic_title}`的章节ID为`{chapter_id}`的下载任务替换失败");
@@ -92,39 +92,39 @@ impl DownloadManager {
         }
 
         let task = DownloadTask::new(self.app.clone(), comic, chapter_id)
-            .context("DownloadTask创建失败")?;
+            .wrap_err("DownloadTask创建失败")?;
 
         tasks.insert(chapter_id, task);
 
         Ok(())
     }
 
-    pub fn pause_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
+    pub fn pause_download_task(&self, chapter_id: i64) -> eyre::Result<()> {
         let tasks = self.download_tasks.read();
         let Some(task) = tasks.get(&chapter_id) else {
-            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+            return Err(eyre!("未找到章节ID为`{chapter_id}`的下载任务"));
         };
         task.set_state(DownloadTaskState::Paused);
         Ok(())
     }
 
-    pub fn resume_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
+    pub fn resume_download_task(&self, chapter_id: i64) -> eyre::Result<()> {
         let tasks = self.download_tasks.read();
         let Some(task) = tasks.get(&chapter_id) else {
-            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+            return Err(eyre!("未找到章节ID为`{chapter_id}`的下载任务"));
         };
         task.set_state(DownloadTaskState::Pending);
         Ok(())
     }
 
-    pub fn delete_download_task(&self, chapter_id: i64) -> anyhow::Result<()> {
+    pub fn delete_download_task(&self, chapter_id: i64) -> eyre::Result<()> {
         let mut tasks = self.download_tasks.write();
         let Some(task) = tasks.remove(&chapter_id) else {
-            return Err(anyhow!("未找到章节ID为`{chapter_id}`的下载任务"));
+            return Err(eyre!("未找到章节ID为`{chapter_id}`的下载任务"));
         };
         task.delete_sender
             .send(())
-            .context(format!("通知章节ID为`{chapter_id}`的下载任务删除失败"))?;
+            .wrap_err(format!("通知章节ID为`{chapter_id}`的下载任务删除失败"))?;
         Ok(())
     }
 }

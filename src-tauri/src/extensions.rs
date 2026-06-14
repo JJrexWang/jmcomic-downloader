@@ -3,8 +3,8 @@ use tauri::{Manager, State};
 
 use crate::{config::Config, downloader::download_manager::DownloadManager, jm_client::JmClient};
 
-pub trait AnyhowErrorToStringChain {
-    /// 将 `anyhow::Error` 转换为chain格式
+pub trait ReportToStringChain {
+    /// 将 `eyre::Report` 转换为chain格式
     /// # Example
     /// 0: error message
     /// 1: error message
@@ -12,7 +12,7 @@ pub trait AnyhowErrorToStringChain {
     fn to_string_chain(&self) -> String;
 }
 
-impl AnyhowErrorToStringChain for anyhow::Error {
+impl ReportToStringChain for eyre::Report {
     fn to_string_chain(&self) -> String {
         use std::fmt::Write;
         self.chain()

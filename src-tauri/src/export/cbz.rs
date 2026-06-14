@@ -4,7 +4,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
-use anyhow::{anyhow, Context};
+use eyre::{eyre, OptionExt, WrapErr};
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tauri::AppHandle;
@@ -14,7 +14,7 @@ use zip::{write::SimpleFileOptions, ZipWriter};
 use crate::{
     events::ExportCbzEvent,
     export::{get_downloaded_chapters, get_image_paths, ExportArchive},
-    extensions::AnyhowErrorToStringChain,
+    extensions::ReportToStringChain,
     types::{Comic, ComicInfo},
 };
 
@@ -38,7 +38,7 @@ impl Drop for CbzErrorEventGuard {
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::too_many_lines)]
-pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
+pub fn cbz(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     let downloaded_chapter_infos = get_downloaded_chapters(&comic.chapter_infos);
     // 生成格式化的xml
     let cfg = yaserde::ser::Config {
@@ -65,11 +65,11 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     let extension = ExportArchive::Cbz.extension();
     let comic_export_dir = comic
         .get_comic_export_dir(app)
-        .context("获取导出目录失败")?;
+        .wrap_err("获取导出目录失败")?;
     let chapter_export_dir = comic_export_dir.join(extension);
     // 保证导出目录存在
     std::fs::create_dir_all(&chapter_export_dir)
-        .context(format!("创建目录`{}`失败", chapter_export_dir.display()))?;
+        .wrap_err(format!("创建目录`{}`失败", chapter_export_dir.display()))?;
     // 先把封面拷贝到导出目录(如果有)
     if let Err(err) = copy_cover(comic, &chapter_export_dir) {
         let comic_title = &comic.name;
@@ -79,21 +79,21 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     }
     // 并发处理
     let downloaded_chapter_infos = downloaded_chapter_infos.into_par_iter();
-    downloaded_chapter_infos.try_for_each(|chapter_info| -> anyhow::Result<()> {
+    downloaded_chapter_infos.try_for_each(|chapter_info| -> eyre::Result<()> {
         let chapter_title = chapter_info.chapter_title.clone();
         // 生成ComicInfo
         let comic_info = ComicInfo::from(comic, &chapter_info);
         // 序列化ComicInfo为xml
         let comic_info_xml =
             yaserde::ser::to_string_with_config(&comic_info, &cfg).map_err(|err_msg| {
-                anyhow!("章节`{chapter_title}`序列化`ComicInfo.xml`失败: {err_msg}")
+                eyre!("章节`{chapter_title}`序列化`ComicInfo.xml`失败: {err_msg}")
             })?;
         // 创建cbz文件
         let chapter_download_dir_name = &chapter_info
             .get_chapter_download_dir_name()
-            .context(format!("章节`{chapter_title}`获取章节下载目录名失败"))?;
+            .wrap_err(format!("章节`{chapter_title}`获取章节下载目录名失败"))?;
         let save_path = chapter_export_dir.join(format!("{chapter_download_dir_name}.{extension}"));
-        let zip_file = std::fs::File::create(&save_path).context(format!(
+        let zip_file = std::fs::File::create(&save_path).wrap_err(format!(
             "章节`{chapter_title}`创建文件`{}`失败",
             save_path.display()
         ))?;
@@ -101,19 +101,23 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
         // 把ComicInfo.xml写入cbz
         zip_writer
             .start_file("ComicInfo.xml", SimpleFileOptions::default())
-            .context(format!(
+            .wrap_err(format!(
                 "章节`{chapter_title}`在`{}`创建`ComicInfo.xml`失败",
                 save_path.display()
             ))?;
         zip_writer
             .write_all(comic_info_xml.as_bytes())
-            .context(format!("章节`{chapter_title}`写入`ComicInfo.xml`失败"))?;
+            .wrap_err(format!("章节`{chapter_title}`写入`ComicInfo.xml`失败"))?;
 
-        let chapter_download_dir = chapter_info.chapter_download_dir.as_ref().context(format!(
-            "章节`{chapter_title}`的`chapter_download_dir`字段为`None`"
-        ))?;
+        let chapter_download_dir =
+            chapter_info
+                .chapter_download_dir
+                .as_ref()
+                .ok_or_eyre(format!(
+                    "章节`{chapter_title}`的`chapter_download_dir`字段为`None`"
+                ))?;
 
-        let image_paths = get_image_paths(chapter_download_dir, false).context(format!(
+        let image_paths = get_image_paths(chapter_download_dir, false).wrap_err(format!(
             "获取`{}`中的图片失败",
             chapter_download_dir.display()
         ))?;
@@ -122,24 +126,24 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
             let filename = image_path
                 .file_name()
                 .and_then(|name: &std::ffi::OsStr| name.to_str())
-                .context(format!("获取`{}`的文件名失败", image_path.display()))?;
+                .ok_or_eyre(format!("获取`{}`的文件名失败", image_path.display()))?;
             // 将文件写入cbz
             zip_writer
                 .start_file(filename, SimpleFileOptions::default())
-                .context(format!(
+                .wrap_err(format!(
                     "章节`{chapter_title}`在`{}`创建`{filename}`失败",
                     save_path.display()
                 ))?;
             let mut file = std::fs::File::open(&image_path)
-                .context(format!("打开`{}`失败", image_path.display()))?;
-            std::io::copy(&mut file, &mut zip_writer).context(format!(
+                .wrap_err(format!("打开`{}`失败", image_path.display()))?;
+            std::io::copy(&mut file, &mut zip_writer).wrap_err(format!(
                 "章节`{chapter_title}`将`{}`写入`{}`失败",
                 image_path.display(),
                 save_path.display()
             ))?;
         }
 
-        zip_writer.finish().context(format!(
+        zip_writer.finish().wrap_err(format!(
             "章节`{chapter_title}`关闭`{}`失败",
             save_path.display()
         ))?;
@@ -165,9 +169,11 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn copy_cover(comic: &Comic, chapter_export_dir: &Path) -> anyhow::Result<()> {
-    let src_cover_path = comic.get_cover_path().context("获取封面路径失败")?;
-    let cover_filename = src_cover_path.file_name().context("获取封面的文件名失败")?;
+fn copy_cover(comic: &Comic, chapter_export_dir: &Path) -> eyre::Result<()> {
+    let src_cover_path = comic.get_cover_path().wrap_err("获取封面路径失败")?;
+    let cover_filename = src_cover_path
+        .file_name()
+        .ok_or_eyre("获取封面的文件名失败")?;
 
     if src_cover_path.exists() {
         let dst_cover_path = chapter_export_dir.join(cover_filename);

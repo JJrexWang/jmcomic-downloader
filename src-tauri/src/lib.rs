@@ -1,8 +1,8 @@
-use anyhow::Context;
 use events::{
     DownloadAllFavoritesEvent, DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
     UpdateDownloadedComicsEvent,
 };
+use eyre::WrapErr;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
 
@@ -92,9 +92,9 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .context("failed to get app data dir")?;
+                .wrap_err("failed to get app data dir")?;
 
-            std::fs::create_dir_all(&app_data_dir).context(format!(
+            std::fs::create_dir_all(&app_data_dir).wrap_err(format!(
                 "failed to create app data dir: {}",
                 app_data_dir.display()
             ))?;

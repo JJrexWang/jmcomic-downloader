@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use eyre::{OptionExt, WrapErr};
 use tauri::AppHandle;
 use tauri_specta::Event;
 use tokio::{
@@ -22,7 +22,7 @@ use crate::{
         download_task_state::DownloadTaskState,
     },
     events::DownloadEvent,
-    extensions::{AnyhowErrorToStringChain, AppHandleExt},
+    extensions::{AppHandleExt, ReportToStringChain},
     jm_client::IMAGE_DOMAIN,
     types::{ChapterInfo, Comic},
 };
@@ -38,17 +38,17 @@ pub struct DownloadTask {
 }
 
 impl DownloadTask {
-    pub fn new(app: AppHandle, mut comic: Comic, chapter_id: i64) -> anyhow::Result<Arc<Self>> {
+    pub fn new(app: AppHandle, mut comic: Comic, chapter_id: i64) -> eyre::Result<Arc<Self>> {
         comic
             .ensure_download_dir_fields(&app)
-            .context(format!("漫画`{}`更新`download_dir`字段失败", comic.name))?;
+            .wrap_err(format!("漫画`{}`更新`download_dir`字段失败", comic.name))?;
 
         let chapter_info = comic
             .chapter_infos
             .iter()
             .find(|chapter| chapter.chapter_id == chapter_id)
             .cloned()
-            .context(format!("未找到章节ID为`{chapter_id}`的章节信息"))?;
+            .ok_or_eyre(format!("未找到章节ID为`{chapter_id}`的章节信息"))?;
 
         let (state_sender, _) = watch::channel(DownloadTaskState::Pending);
         let (delete_sender, _) = watch::channel(());
@@ -201,8 +201,8 @@ impl DownloadTask {
         self.emit_download_task_update_event();
     }
 
-    async fn download_cover(&self) -> anyhow::Result<()> {
-        let cover_path = self.comic.get_cover_path().context("获取封面路径失败")?;
+    async fn download_cover(&self) -> eyre::Result<()> {
+        let cover_path = self.comic.get_cover_path().wrap_err("获取封面路径失败")?;
 
         let comic_id = self.comic.id;
         let url = format!("https://cdn-msp3.18comic.vip/media/albums/{comic_id}.jpg");
@@ -212,10 +212,10 @@ impl DownloadTask {
             .get_jm_client()
             .get_img_data_and_format(&url)
             .await
-            .context(format!("下载图片`{url}`失败"))?;
+            .wrap_err(format!("下载图片`{url}`失败"))?;
 
         std::fs::write(&cover_path, img_data)
-            .context(format!("保存图片`{}`失败", cover_path.display()))?;
+            .wrap_err(format!("保存图片`{}`失败", cover_path.display()))?;
 
         Ok(())
     }
@@ -237,7 +237,7 @@ impl DownloadTask {
             }
         };
 
-        if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(anyhow::Error::from) {
+        if let Err(err) = std::fs::create_dir_all(&temp_download_dir).map_err(eyre::Report::from) {
             let err_title = format!(
                 "`{comic_title} - {chapter_title}`创建临时下载目录`{}`失败",
                 temp_download_dir.display()
@@ -260,19 +260,19 @@ impl DownloadTask {
         Some(temp_download_dir)
     }
 
-    fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> anyhow::Result<()> {
+    fn rename_temp_download_dir(&self, temp_download_dir: &Path) -> eyre::Result<()> {
         let chapter_download_dir = self
             .chapter_info
             .chapter_download_dir
             .as_ref()
-            .context("`chapter_download_dir`字段为`None`")?;
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
 
         if chapter_download_dir.exists() {
             std::fs::remove_dir_all(chapter_download_dir)
-                .context(format!("删除 `{}` 失败", chapter_download_dir.display()))?;
+                .wrap_err(format!("删除 `{}` 失败", chapter_download_dir.display()))?;
         }
 
-        std::fs::rename(temp_download_dir, chapter_download_dir).context(format!(
+        std::fs::rename(temp_download_dir, chapter_download_dir).wrap_err(format!(
             "将 `{}` 重命名为 `{}` 失败",
             temp_download_dir.display(),
             chapter_download_dir.display()
@@ -332,7 +332,7 @@ impl DownloadTask {
         let comic_title = &self.comic.name;
         let chapter_title = &self.chapter_info.chapter_title;
 
-        let entries = match std::fs::read_dir(temp_download_dir).map_err(anyhow::Error::from) {
+        let entries = match std::fs::read_dir(temp_download_dir).map_err(eyre::Report::from) {
             Ok(entries) => entries,
             Err(err) => {
                 let err_title = format!(
@@ -355,7 +355,7 @@ impl DownloadTask {
                 continue;
             }
 
-            if let Err(err) = std::fs::remove_file(&path).map_err(anyhow::Error::from) {
+            if let Err(err) = std::fs::remove_file(&path).map_err(eyre::Report::from) {
                 let err_title =
                     format!("`{comic_title}`删除临时下载目录的`{}`失败", path.display());
                 tracing::error!(err_title, message = err.to_string_chain());
@@ -387,7 +387,7 @@ impl DownloadTask {
                 .chapter_sem
                 .acquire()
                 .await
-                .map_err(anyhow::Error::from)
+                .map_err(eyre::Report::from)
             {
                 Ok(permit) => Some(permit),
                 Err(err) => {
@@ -409,7 +409,7 @@ impl DownloadTask {
         if let Err(err) = self
             .state_sender
             .send(DownloadTaskState::Downloading)
-            .map_err(anyhow::Error::from)
+            .map_err(eyre::Report::from)
         {
             let err_title = format!("`{comic_title} - {chapter_title}`发送状态`Downloading`失败");
             tracing::error!(err_title, message = err.to_string_chain());
@@ -473,7 +473,7 @@ impl DownloadTask {
         let comic_title = &self.comic.name;
         let chapter_title = &self.chapter_info.chapter_title;
 
-        if let Err(err) = self.state_sender.send(state).map_err(anyhow::Error::from) {
+        if let Err(err) = self.state_sender.send(state).map_err(eyre::Report::from) {
             let err_title = format!("`{comic_title} - {chapter_title}`发送状态`{state:?}`失败");
             tracing::error!(err_title, message = err.to_string_chain());
         }

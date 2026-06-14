@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{anyhow, Context};
+use eyre::{eyre, OptionExt, WrapErr};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
@@ -20,15 +20,15 @@ pub struct ChapterInfo {
 }
 
 impl ChapterInfo {
-    pub fn get_chapter_download_dir_name(&self) -> anyhow::Result<String> {
+    pub fn get_chapter_download_dir_name(&self) -> eyre::Result<String> {
         let chapter_download_dir = self
             .chapter_download_dir
             .as_ref()
-            .context("`chapter_download_dir`字段为`None`")?;
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
 
         let chapter_download_dir_name = chapter_download_dir
             .file_name()
-            .context(format!(
+            .ok_or_eyre(format!(
                 "获取`{}`的目录名失败",
                 chapter_download_dir.display()
             ))?
@@ -38,7 +38,7 @@ impl ChapterInfo {
         Ok(chapter_download_dir_name)
     }
 
-    pub fn save_chapter_metadata(&self) -> anyhow::Result<()> {
+    pub fn save_chapter_metadata(&self) -> eyre::Result<()> {
         let mut chapter_info = self.clone();
         // 将is_downloaded和chapter_download_dir字段设置为None
         // 这样能使这些字段在序列化时被忽略
@@ -48,17 +48,17 @@ impl ChapterInfo {
         let chapter_download_dir = self
             .chapter_download_dir
             .as_ref()
-            .context("`chapter_download_dir`字段为`None`")?;
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
         let metadata_path = chapter_download_dir.join("章节元数据.json");
 
         std::fs::create_dir_all(chapter_download_dir)
-            .context(format!("创建目录`{}`失败", chapter_download_dir.display()))?;
+            .wrap_err(format!("创建目录`{}`失败", chapter_download_dir.display()))?;
 
-        let chapter_json =
-            serde_json::to_string_pretty(&chapter_info).context("将ChapterInfo序列化为json失败")?;
+        let chapter_json = serde_json::to_string_pretty(&chapter_info)
+            .wrap_err("将ChapterInfo序列化为json失败")?;
 
         std::fs::write(&metadata_path, chapter_json)
-            .context(format!("写入文件`{}`失败", metadata_path.display()))?;
+            .wrap_err(format!("写入文件`{}`失败", metadata_path.display()))?;
 
         Ok(())
     }
@@ -66,13 +66,15 @@ impl ChapterInfo {
     pub fn get_chapter_download_dir_by_fmt(
         app: &AppHandle,
         fmt_params: &DirFmtParams,
-    ) -> anyhow::Result<PathBuf> {
+    ) -> eyre::Result<PathBuf> {
         use strfmt::strfmt;
 
         let json_value =
-            serde_json::to_value(fmt_params).context("将DirFmtParams转为serde_json::Value失败")?;
+            serde_json::to_value(fmt_params).wrap_err("将DirFmtParams转为serde_json::Value失败")?;
 
-        let json_map = json_value.as_object().context("DirFmtParams不是JSON对象")?;
+        let json_map = json_value
+            .as_object()
+            .ok_or_eyre("DirFmtParams不是JSON对象")?;
 
         let vars: HashMap<String, String> = json_map
             .into_iter()
@@ -96,7 +98,7 @@ impl ChapterInfo {
 
         let mut dir_names = Vec::new();
         for fmt in dir_fmt_parts {
-            let dir_name = strfmt(fmt, &vars).context("格式化目录名失败")?;
+            let dir_name = strfmt(fmt, &vars).wrap_err("格式化目录名失败")?;
             let dir_name = utils::filename_filter(&dir_name);
             if !dir_name.is_empty() {
                 dir_names.push(dir_name);
@@ -106,7 +108,7 @@ impl ChapterInfo {
         if dir_names.len() < 2 {
             let err_msg =
                 "配置中的下载目录格式至少要有两个层级，例如：{comic_title}/{chapter_title}";
-            return Err(anyhow!(err_msg));
+            return Err(eyre!(err_msg));
         }
 
         let mut chapter_download_dir = download_dir;
@@ -117,17 +119,17 @@ impl ChapterInfo {
         Ok(chapter_download_dir)
     }
 
-    pub fn get_temp_download_dir(&self) -> anyhow::Result<PathBuf> {
+    pub fn get_temp_download_dir(&self) -> eyre::Result<PathBuf> {
         let chapter_download_dir = self
             .chapter_download_dir
             .as_ref()
-            .context("`chapter_download_dir`字段为`None`")?;
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
 
         let chapter_download_dir_name = self
             .get_chapter_download_dir_name()
-            .context("获取章节下载目录名失败")?;
+            .wrap_err("获取章节下载目录名失败")?;
 
-        let parent = chapter_download_dir.parent().context(format!(
+        let parent = chapter_download_dir.parent().ok_or_eyre(format!(
             "`{}`的父目录不存在",
             chapter_download_dir.display()
         ))?;

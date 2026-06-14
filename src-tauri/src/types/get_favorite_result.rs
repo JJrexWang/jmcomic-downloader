@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Context;
+use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
@@ -26,17 +26,17 @@ impl GetFavoriteResult {
     pub fn from_resp_data(
         app: &AppHandle,
         resp_data: GetFavoriteRespData,
-    ) -> anyhow::Result<GetFavoriteResult> {
+    ) -> eyre::Result<GetFavoriteResult> {
         let id_to_dir_map =
-            utils::create_id_to_dir_map(app).context("创建漫画ID到下载目录映射失败")?;
+            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
 
         let list = resp_data
             .list
             .into_iter()
             .map(|comic| ComicInFavorite::from_resp_data(comic, &id_to_dir_map))
-            .collect::<anyhow::Result<_>>()?;
+            .collect::<eyre::Result<_>>()?;
 
-        let total: i64 = resp_data.total.parse().context("将total解析为i64失败")?;
+        let total: i64 = resp_data.total.parse().wrap_err("将total解析为i64失败")?;
 
         let get_favorite_result = GetFavoriteResult {
             list,
@@ -69,8 +69,8 @@ impl ComicInFavorite {
     pub fn from_resp_data(
         resp_data: ComicInFavoriteRespData,
         id_to_dir_map: &HashMap<i64, PathBuf>,
-    ) -> anyhow::Result<ComicInFavorite> {
-        let id: i64 = resp_data.id.parse().context("将id解析为i64失败")?;
+    ) -> eyre::Result<ComicInFavorite> {
+        let id: i64 = resp_data.id.parse().wrap_err("将id解析为i64失败")?;
 
         let mut comic = ComicInFavorite {
             id,

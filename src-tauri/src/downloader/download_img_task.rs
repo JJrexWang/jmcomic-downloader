@@ -6,8 +6,8 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
 use bytes::Bytes;
+use eyre::WrapErr;
 use image::codecs::png;
 use image::codecs::png::PngEncoder;
 use image::{ImageFormat, RgbImage};
@@ -19,7 +19,7 @@ use tokio::{
 
 use crate::{
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
-    extensions::{AnyhowErrorToStringChain, AppHandleExt},
+    extensions::{AppHandleExt, ReportToStringChain},
     types::DownloadFormat,
     utils,
 };
@@ -190,7 +190,7 @@ impl DownloadImgTask {
                 .img_sem
                 .acquire()
                 .await
-                .map_err(anyhow::Error::from)
+                .map_err(eyre::Report::from)
             {
                 Ok(permit) => Some(permit),
                 Err(err) => {
@@ -267,17 +267,17 @@ async fn save_img(
     block_num: u32,
     src_img_data: Bytes,
     src_format: ImageFormat,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     if src_format == ImageFormat::Gif {
         std::fs::write(save_path, src_img_data)
-            .context(format!("保存图片`{}`失败", save_path.display()))?;
+            .wrap_err(format!("保存图片`{}`失败", save_path.display()))?;
         return Ok(());
     }
 
     let save_path = save_path.to_path_buf();
-    let process_img = move || -> anyhow::Result<()> {
+    let process_img = move || -> eyre::Result<()> {
         let mut src_img = image::load_from_memory(&src_img_data)
-            .context("解码图片失败")?
+            .wrap_err("解码图片失败")?
             .to_rgb8();
 
         let dst_img = if block_num == 0 {
@@ -305,11 +305,11 @@ async fn save_img(
         }
 
         std::fs::write(&save_path, dst_img_data)
-            .context(format!("保存图片`{}`失败", save_path.display()))?;
+            .wrap_err(format!("保存图片`{}`失败", save_path.display()))?;
         Ok(())
     };
 
-    let (sender, receiver) = tokio::sync::oneshot::channel::<anyhow::Result<()>>();
+    let (sender, receiver) = tokio::sync::oneshot::channel::<eyre::Result<()>>();
     rayon::spawn(move || {
         let _ = sender.send(process_img());
     });

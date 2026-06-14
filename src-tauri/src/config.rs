@@ -36,7 +36,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(app: &AppHandle) -> anyhow::Result<Self> {
+    pub fn new(app: &AppHandle) -> eyre::Result<Self> {
         let app_data_dir = app.path().app_data_dir()?;
         let config_path = app_data_dir.join("config.json");
 
@@ -56,7 +56,7 @@ impl Config {
         Ok(config)
     }
 
-    pub fn save(&self, app: &AppHandle) -> anyhow::Result<()> {
+    pub fn save(&self, app: &AppHandle) -> eyre::Result<()> {
         let resource_dir = app.path().app_data_dir()?;
         let config_path = resource_dir.join("config.json");
         let config_string = serde_json::to_string_pretty(self)?;
