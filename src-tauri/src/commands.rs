@@ -16,7 +16,7 @@ use walkdir::WalkDir;
 use crate::config::Config;
 use crate::errors::{CommandError, CommandResult};
 use crate::events::{DownloadAllFavoritesEvent, UpdateDownloadedComicsEvent};
-use crate::extensions::{AppHandleExt, ReportToStringChain, WalkDirEntryExt};
+use crate::extensions::{AppHandleExt, EyreReportToMessage, WalkDirEntryExt};
 use crate::responses::{GetUserProfileRespData, GetWeeklyInfoRespData};
 use crate::types::{
     ChapterInfo, Comic, ComicInFavorite, ComicInSearch, ComicInWeekly, FavoriteSort,
@@ -352,8 +352,8 @@ pub async fn download_all_favorites(app: AppHandle) -> CommandResult<()> {
             Ok(id) => id,
             Err(err) => {
                 let err_title = format!("下载收藏夹过程中，获取漫画`{comic_title}`失败，已跳过");
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 sleep(Duration::from_secs(interval_sec)).await;
                 continue;
             }
@@ -364,8 +364,8 @@ pub async fn download_all_favorites(app: AppHandle) -> CommandResult<()> {
             Err(err) => {
                 let err_title = format!("下载收藏夹过程中，获取漫画`{comic_title}`失败，已跳过");
                 let err = err.wrap_err("可能是频率太高，请手动去`配置`里调整`下载整个收藏夹时，每处理完一个收藏夹中的漫画后休息`");
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 sleep(Duration::from_secs(interval_sec)).await;
                 continue;
             }
@@ -445,8 +445,8 @@ pub async fn update_downloaded_comics(app: AppHandle) -> CommandResult<()> {
             Err(err) => {
                 let err_title = format!("更新库存过程中，获取漫画`{comic_title}`失败，已跳过");
                 let err = err.wrap_err("可能是频率太高，请手动去`配置`里调整`更新库存时，每处理完一个已下载的漫画后休息`");
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 sleep(Duration::from_secs(interval_sec)).await;
                 continue;
             }
@@ -565,8 +565,8 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
             Ok(metadata) => metadata,
             Err(err) => {
                 let err_title = "获取已下载漫画的过程中遇到错误，已跳过";
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 continue;
             }
         };
@@ -579,8 +579,8 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
             Ok(modify_time) => modify_time,
             Err(err) => {
                 let err_title = "获取已下载漫画的过程中遇到错误，已跳过";
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 continue;
             }
         };
@@ -599,8 +599,8 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
             Ok(comic) => downloaded_comics.push(comic),
             Err(err) => {
                 let err_title = "获取已下载漫画的过程中遇到错误，已跳过";
-                let string_chain = err.to_string_chain();
-                tracing::error!(err_title, message = string_chain);
+                let message = err.to_message();
+                tracing::error!(err_title, message);
             }
         }
     }
@@ -635,7 +635,7 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
             // 如果有重复的漫画，打印错误信息
             let comic_title = &comics[0].name;
             let err_title = "获取已下载漫画的过程中遇到错误";
-            let string_chain = eyre!("所有版本路径: [{dir_paths_string}]")
+            let message = eyre!("所有版本路径: [{dir_paths_string}]")
                 .wrap_err(format!(
                     "此次获取已下载漫画的结果中只保留版本`{}`",
                     chosen_download_dir.display()
@@ -643,8 +643,8 @@ pub fn get_downloaded_comics(app: AppHandle) -> Vec<Comic> {
                 .wrap_err(format!(
                     "漫画`{comic_title}`在下载目录里有多个版本，请手动处理，只保留一个版本"
                 ))
-                .to_string_chain();
-            tracing::error!(err_title, message = string_chain);
+                .to_message();
+            tracing::error!(err_title, message);
         }
         // 取第一个作为保留的漫画
         let chosen_comic = comics.remove(0);

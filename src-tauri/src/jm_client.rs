@@ -18,7 +18,7 @@ use reqwest_retry::{Jitter, RetryTransientMiddleware};
 use serde_json::json;
 use tauri::AppHandle;
 
-use crate::extensions::{AppHandleExt, ReportToStringChain};
+use crate::extensions::{AppHandleExt, EyreReportToMessage};
 use crate::responses::{
     GetChapterRespData, GetComicRespData, GetFavoriteRespData, GetUserProfileRespData,
     GetWeeklyInfoRespData, GetWeeklyRespData, JmResp, RedirectRespData, SearchResp, SearchRespData,
@@ -593,8 +593,8 @@ pub fn create_api_client(app: &AppHandle, jar: &Arc<Jar>) -> ClientWithMiddlewar
                 Ok(proxy) => builder.proxy(proxy),
                 Err(err) => {
                     let err_title = format!("`JmClient`设置代理`{proxy_url}`失败");
-                    let string_chain = err.to_string_chain();
-                    tracing::error!(err_title, message = string_chain);
+                    let message = err.to_message();
+                    tracing::error!(err_title, message);
                     builder
                 }
             }
@@ -629,8 +629,8 @@ pub fn create_img_client(app: &AppHandle) -> ClientWithMiddleware {
                 Ok(proxy) => builder.proxy(proxy),
                 Err(err) => {
                     let err_title = format!("`DownloadManager`设置代理`{proxy_url}`失败");
-                    let string_chain = err.to_string_chain();
-                    tracing::error!(err_title, message = string_chain);
+                    let message = err.to_message();
+                    tracing::error!(err_title, message);
                     builder
                 }
             }

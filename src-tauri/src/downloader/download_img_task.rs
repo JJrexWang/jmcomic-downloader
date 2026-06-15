@@ -19,7 +19,7 @@ use tokio::{
 
 use crate::{
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
-    extensions::{AppHandleExt, ReportToStringChain},
+    extensions::{AppHandleExt, EyreReportToMessage},
     types::DownloadFormat,
     utils,
 };
@@ -120,7 +120,8 @@ impl DownloadImgTask {
             Ok(data) => data,
             Err(err) => {
                 let err_title = format!("下载图片`{url}`失败");
-                tracing::error!(err_title, message = err.to_string_chain());
+                let message = err.to_message();
+                tracing::error!(err_title, message);
                 return;
             }
         };
@@ -144,7 +145,8 @@ impl DownloadImgTask {
         .await
         {
             let err_title = format!("保存图片`{url}`失败");
-            tracing::error!(err_title, message = err.to_string_chain());
+            let message = err.to_message();
+            tracing::error!(err_title, message);
             return;
         }
 
@@ -196,7 +198,8 @@ impl DownloadImgTask {
                 Err(err) => {
                     let err_title =
                         format!("`{comic_title} - {chapter_title}`获取下载图片的permit失败");
-                    tracing::error!(err_title, message = err.to_string_chain());
+                    let message = err.to_message();
+                    tracing::error!(err_title, message);
                     return ControlFlow::Break(());
                 }
             },

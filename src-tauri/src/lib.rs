@@ -10,6 +10,7 @@ use tauri::{Manager, Wry};
 use crate::commands::*;
 use crate::config::Config;
 use crate::downloader::download_manager::DownloadManager;
+use crate::errors::install_custom_eyre_handler;
 use crate::jm_client::JmClient;
 
 mod commands;
@@ -32,6 +33,8 @@ fn generate_context() -> tauri::Context<Wry> {
 // TODO: 添加Panic Doc
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_custom_eyre_handler().unwrap();
+
     let builder = tauri_specta::Builder::<Wry>::new()
         .commands(tauri_specta::collect_commands![
             greet,

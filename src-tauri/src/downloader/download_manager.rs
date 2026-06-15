@@ -17,7 +17,7 @@ use crate::{
     config::Config,
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
     events::DownloadEvent,
-    extensions::ReportToStringChain,
+    extensions::EyreReportToMessage,
     types::Comic,
 };
 
@@ -87,7 +87,8 @@ impl DownloadManager {
             {
                 let err_title =
                     format!("`{comic_title}`的章节ID为`{chapter_id}`的下载任务替换失败");
-                tracing::error!(err_title, message = err.to_string_chain());
+                let message = err.to_message();
+                tracing::error!(err_title, message);
             }
         }
 

@@ -14,7 +14,7 @@ use zip::{write::SimpleFileOptions, ZipWriter};
 use crate::{
     events::ExportCbzEvent,
     export::{get_downloaded_chapters, get_image_paths, ExportArchive},
-    extensions::ReportToStringChain,
+    extensions::EyreReportToMessage,
     types::{Comic, ComicInfo},
 };
 
@@ -74,8 +74,8 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     if let Err(err) = copy_cover(comic, &chapter_export_dir) {
         let comic_title = &comic.name;
         let err_title = format!("`{comic_title}`导出cbz时，将封面拷贝到导出目录失败");
-        let string_chain = err.to_string_chain();
-        tracing::error!(err_title, message = string_chain);
+        let message = err.to_message();
+        tracing::error!(err_title, message);
     }
     // 并发处理
     let downloaded_chapter_infos = downloaded_chapter_infos.into_par_iter();
