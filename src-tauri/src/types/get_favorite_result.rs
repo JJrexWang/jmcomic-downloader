@@ -4,6 +4,7 @@ use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{
     responses::{
@@ -23,12 +24,12 @@ pub struct GetFavoriteResult {
 }
 
 impl GetFavoriteResult {
+    #[instrument(level = "error", skip_all)]
     pub fn from_resp_data(
         app: &AppHandle,
         resp_data: GetFavoriteRespData,
     ) -> eyre::Result<GetFavoriteResult> {
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         let list = resp_data
             .list

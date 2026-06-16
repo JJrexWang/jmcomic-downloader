@@ -16,6 +16,7 @@ use tokio::{
     sync::{watch, SemaphorePermit},
     time::sleep,
 };
+use tracing::instrument;
 
 use crate::{
     downloader::{download_task::DownloadTask, download_task_state::DownloadTaskState},
@@ -51,6 +52,18 @@ impl DownloadImgTask {
         }
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            index = self.index,
+            url = self.url,
+            comic_id = self.download_task.comic.id,
+            comic_title = self.download_task.comic.name,
+            chapter_id = self.download_task.chapter_info.chapter_id,
+            chapter_title = self.download_task.chapter_info.chapter_title
+        )
+    )]
     pub async fn process(self) {
         let download_img_task = self.download_img();
         tokio::pin!(download_img_task);
@@ -89,10 +102,9 @@ impl DownloadImgTask {
         }
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn download_img(&self) {
         let url = &self.url;
-        let comic_title = &self.download_task.comic.name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
 
         let index_filename = format!("{:04}", self.index + 1);
         let download_format = self.app.get_config().read().download_format;
@@ -110,16 +122,16 @@ impl DownloadImgTask {
 
             self.download_task.emit_download_task_update_event();
 
-            tracing::trace!(url, comic_title, chapter_title, "图片已存在，跳过下载");
+            tracing::trace!("图片已存在，跳过下载");
             return;
         }
 
-        tracing::trace!(url, comic_title, chapter_title, "开始下载图片");
+        tracing::trace!("开始下载图片");
 
         let (img_data, format) = match self.app.get_jm_client().get_img_data_and_format(url).await {
             Ok(data) => data,
             Err(err) => {
-                let err_title = format!("下载图片`{url}`失败");
+                let err_title = "下载图片失败";
                 let message = err.to_message();
                 tracing::error!(err_title, message);
                 return;
@@ -127,7 +139,7 @@ impl DownloadImgTask {
         };
         let img_data_len = img_data.len() as u64;
 
-        tracing::trace!(url, comic_title, chapter_title, "图片成功下载到内存");
+        tracing::trace!("图片成功下载到内存");
 
         let save_path = if format == ImageFormat::Gif {
             gif_path
@@ -144,19 +156,13 @@ impl DownloadImgTask {
         )
         .await
         {
-            let err_title = format!("保存图片`{url}`失败");
+            let err_title = "保存图片失败";
             let message = err.to_message();
             tracing::error!(err_title, message);
             return;
         }
 
-        tracing::trace!(
-            url,
-            comic_title,
-            chapter_title,
-            "图片成功保存到`{}`",
-            save_path.display()
-        );
+        tracing::trace!("图片成功保存到磁盘");
 
         self.app
             .get_download_manager()
@@ -173,15 +179,12 @@ impl DownloadImgTask {
         sleep(Duration::from_secs(img_download_interval_sec)).await;
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn acquire_img_permit<'a>(
         &'a self,
         permit: &mut Option<SemaphorePermit<'a>>,
     ) -> ControlFlow<()> {
-        let url = &self.url;
-        let comic_title = &self.download_task.comic.name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
-
-        tracing::trace!(comic_title, chapter_title, url, "图片开始排队");
+        tracing::trace!("图片开始排队");
 
         *permit = match permit.take() {
             Some(permit) => Some(permit),
@@ -196,8 +199,7 @@ impl DownloadImgTask {
             {
                 Ok(permit) => Some(permit),
                 Err(err) => {
-                    let err_title =
-                        format!("`{comic_title} - {chapter_title}`获取下载图片的permit失败");
+                    let err_title = "获取下载图片的permit失败";
                     let message = err.to_message();
                     tracing::error!(err_title, message);
                     return ControlFlow::Break(());
@@ -208,25 +210,22 @@ impl DownloadImgTask {
         ControlFlow::Continue(())
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn handle_state_change<'a>(
         &'a self,
         permit: &mut Option<SemaphorePermit<'a>>,
         state_receiver: &mut watch::Receiver<DownloadTaskState>,
     ) -> ControlFlow<()> {
-        let url = &self.url;
-        let comic_title = &self.download_task.comic.name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
-
         let state = *state_receiver.borrow();
         if state == DownloadTaskState::Paused {
             sleep(Duration::from_millis(100)).await;
-            tracing::trace!(comic_title, chapter_title, url, "图片暂停下载");
+            tracing::trace!("图片暂停下载");
             if let Some(permit) = permit.take() {
                 drop(permit);
             }
         } else if state == DownloadTaskState::Failed {
             sleep(Duration::from_millis(100)).await;
-            tracing::trace!(comic_title, chapter_title, url, "图片取消下载");
+            tracing::trace!("图片取消下载");
             if let Some(permit) = permit.take() {
                 drop(permit);
             }
@@ -235,16 +234,13 @@ impl DownloadImgTask {
         ControlFlow::Continue(())
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn handle_delete_receiver_change<'a>(&'a self, permit: &mut Option<SemaphorePermit<'a>>) {
-        let url = &self.url;
-        let comic_title = &self.download_task.comic.name;
-        let chapter_title = &self.download_task.chapter_info.chapter_title;
-
         if permit.is_some() {
             sleep(Duration::from_millis(100)).await;
         }
 
-        tracing::trace!(comic_title, chapter_title, url, "图片取消下载");
+        tracing::trace!("图片取消下载");
     }
 }
 
@@ -264,6 +260,16 @@ pub fn calculate_block_num(scramble_id: i64, id: i64, filename: &str) -> u32 {
     }
 }
 
+#[instrument(
+    level = "error",
+    skip_all,
+    fields(
+        save_path = %save_path.display(),
+        download_format = ?download_format,
+        block_num = block_num,
+        src_format = ?src_format
+    )
+)]
 async fn save_img(
     save_path: &Path,
     download_format: DownloadFormat,
@@ -274,11 +280,14 @@ async fn save_img(
     if src_format == ImageFormat::Gif {
         std::fs::write(save_path, src_img_data)
             .wrap_err(format!("保存图片`{}`失败", save_path.display()))?;
+        tracing::trace!("图片成功保存到磁盘");
         return Ok(());
     }
 
     let save_path = save_path.to_path_buf();
+    let current_span = tracing::Span::current();
     let process_img = move || -> eyre::Result<()> {
+        let _enter = current_span.enter();
         let mut src_img = image::load_from_memory(&src_img_data)
             .wrap_err("解码图片失败")?
             .to_rgb8();
@@ -317,7 +326,9 @@ async fn save_img(
         let _ = sender.send(process_img());
     });
 
-    receiver.await?
+    let result = receiver.await?;
+    tracing::trace!("图片成功保存到磁盘");
+    result
 }
 
 fn stitch_img(src_img: &mut RgbImage, block_num: u32) -> RgbImage {

@@ -4,6 +4,7 @@ use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{
     responses::{
@@ -49,12 +50,12 @@ pub struct SearchResult {
 }
 
 impl SearchResult {
+    #[instrument(level = "error", skip_all)]
     pub fn from_resp_data(
         app: &AppHandle,
         search_resp_data: SearchRespData,
     ) -> eyre::Result<SearchResult> {
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         let content = search_resp_data
             .content

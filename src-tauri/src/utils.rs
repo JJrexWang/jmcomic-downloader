@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use eyre::{OptionExt, WrapErr};
 use tauri::AppHandle;
+use tracing::instrument;
 use walkdir::WalkDir;
 
 use crate::{
@@ -34,6 +35,7 @@ pub fn md5_hex(data: &str) -> String {
     format!("{:x}", md5::compute(data))
 }
 
+#[instrument(level = "error", skip_all)]
 pub fn create_id_to_dir_map(app: &AppHandle) -> eyre::Result<HashMap<i64, PathBuf>> {
     let mut id_to_dir_map: HashMap<i64, PathBuf> = HashMap::new();
     let download_dir = app.get_config().read().download_dir.clone();
@@ -69,6 +71,7 @@ pub fn create_id_to_dir_map(app: &AppHandle) -> eyre::Result<HashMap<i64, PathBu
     Ok(id_to_dir_map)
 }
 
+#[instrument(level = "error", skip_all, fields(aid = aid))]
 pub async fn get_comic(app: AppHandle, aid: i64) -> eyre::Result<Comic> {
     let jm_client = app.get_jm_client();
 

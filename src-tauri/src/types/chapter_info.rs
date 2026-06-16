@@ -4,6 +4,7 @@ use eyre::{eyre, OptionExt, WrapErr};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{extensions::AppHandleExt, utils};
 
@@ -20,6 +21,15 @@ pub struct ChapterInfo {
 }
 
 impl ChapterInfo {
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            chapter_id = self.chapter_id,
+            chapter_title = self.chapter_title,
+            order = self.order
+        )
+    )]
     pub fn get_chapter_download_dir_name(&self) -> eyre::Result<String> {
         let chapter_download_dir = self
             .chapter_download_dir
@@ -38,6 +48,15 @@ impl ChapterInfo {
         Ok(chapter_download_dir_name)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            chapter_id = self.chapter_id,
+            chapter_title = self.chapter_title,
+            order = self.order
+        )
+    )]
     pub fn save_chapter_metadata(&self) -> eyre::Result<()> {
         let mut chapter_info = self.clone();
         // 将is_downloaded和chapter_download_dir字段设置为None
@@ -63,6 +82,18 @@ impl ChapterInfo {
         Ok(())
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = fmt_params.comic_id,
+            comic_title = fmt_params.comic_title,
+            author = fmt_params.author,
+            chapter_id = fmt_params.chapter_id,
+            chapter_title = fmt_params.chapter_title,
+            order = fmt_params.order
+        )
+    )]
     pub fn get_chapter_download_dir_by_fmt(
         app: &AppHandle,
         fmt_params: &DirFmtParams,
@@ -119,6 +150,15 @@ impl ChapterInfo {
         Ok(chapter_download_dir)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            chapter_id = self.chapter_id,
+            chapter_title = self.chapter_title,
+            order = self.order
+        )
+    )]
     pub fn get_temp_download_dir(&self) -> eyre::Result<PathBuf> {
         let chapter_download_dir = self
             .chapter_download_dir

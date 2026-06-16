@@ -7,6 +7,7 @@ use eyre::{eyre, OptionExt, WrapErr};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 use walkdir::WalkDir;
 
 use crate::{
@@ -51,6 +52,11 @@ pub struct Comic {
 }
 
 impl Comic {
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = comic.id, comic_title = comic.name)
+    )]
     pub fn from_comic_resp_data(app: &AppHandle, comic: GetComicRespData) -> eyre::Result<Comic> {
         let mut chapter_infos: Vec<ChapterInfo> = comic
             .series
@@ -108,8 +114,7 @@ impl Comic {
             comic_download_dir: None,
         };
 
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).wrap_err("创建漫画ID到下载目录映射失败")?;
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         // TODO: 这是为了兼容v0.15.4及之前的版本，后续需要移除，计划在v0.17.0之后移除
         if let Some(comic_download_dir) = id_to_dir_map.get(&comic.id) {
@@ -118,13 +123,12 @@ impl Comic {
                 .wrap_err("为旧版本创建章节元数据失败")?;
         }
 
-        comic
-            .update_fields(&id_to_dir_map)
-            .wrap_err(format!("`{}`更新Comic的字段失败", comic.name))?;
+        comic.update_fields(&id_to_dir_map)?;
 
         Ok(comic)
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn update_fields(&mut self, id_to_dir_map: &HashMap<i64, PathBuf>) -> eyre::Result<()> {
         if let Some(comic_download_dir) = id_to_dir_map.get(&self.id) {
             self.comic_download_dir = Some(comic_download_dir.clone());
@@ -137,13 +141,11 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(metadata_path = %metadata_path.display()))]
     pub fn from_metadata(metadata_path: &Path) -> eyre::Result<Comic> {
-        let comic_json = std::fs::read_to_string(metadata_path)
-            .wrap_err(format!("读取`{}`失败", metadata_path.display()))?;
-        let mut comic = serde_json::from_str::<Comic>(&comic_json).wrap_err(format!(
-            "将`{}`反序列化为Comic失败",
-            metadata_path.display()
-        ))?;
+        let comic_json = std::fs::read_to_string(metadata_path)?;
+        let mut comic = serde_json::from_str::<Comic>(&comic_json)
+            .wrap_err("将元数据文件反序列化为Comic失败")?;
         // 来自元数据的章节信息没有`download_dir`和`is_downloaded`字段，需要更新
         let parent = metadata_path
             .parent()
@@ -158,13 +160,12 @@ impl Comic {
         comic.comic_download_dir = Some(comic_download_dir);
         comic.is_downloaded = Some(true);
 
-        comic
-            .update_chapter_infos_fields()
-            .wrap_err("更新章节信息字段失败")?;
+        comic.update_chapter_infos_fields()?;
 
         Ok(comic)
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn get_comic_download_dir_name(&self) -> eyre::Result<String> {
         let comic_download_dir = self
             .comic_download_dir
@@ -183,6 +184,7 @@ impl Comic {
         Ok(comic_download_dir_name)
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn get_comic_export_dir(&self, app: &AppHandle) -> eyre::Result<PathBuf> {
         let (download_dir, export_dir) = {
             let config = app.get_config();
@@ -206,6 +208,7 @@ impl Comic {
         Ok(comic_export_dir)
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn ensure_download_dir_fields(&mut self, app: &AppHandle) -> eyre::Result<()> {
         if self.has_download_dir_fields() {
             return Ok(());
@@ -224,6 +227,7 @@ impl Comic {
         comic_download_dir_ready && chapter_download_dir_ready
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn save_comic_metadata(&self) -> eyre::Result<()> {
         let mut comic = self.clone();
         // 将漫画的is_downloaded和comic_download_dir字段设置为None
@@ -255,6 +259,7 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn get_cover_path(&self) -> eyre::Result<PathBuf> {
         let comic_download_dir = self
             .comic_download_dir
@@ -266,6 +271,7 @@ impl Comic {
         Ok(cover_path)
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     pub fn update_download_dir_fields_by_fmt(&mut self, app: &AppHandle) -> eyre::Result<()> {
         if self.chapter_infos.is_empty() {
             return Err(eyre!("没有章节信息，无法更新下载目录字段"));
@@ -313,6 +319,7 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     fn update_chapter_infos_fields(&mut self) -> eyre::Result<()> {
         let Some(comic_download_dir) = &self.comic_download_dir else {
             return Err(eyre!("`comic_download_dir`字段为`None`"));
@@ -361,6 +368,7 @@ impl Comic {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(comic_id = self.id, comic_title = self.name))]
     fn create_chapter_metadata_for_old_version(
         &self,
         comic_download_dir: &Path,

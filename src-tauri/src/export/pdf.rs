@@ -15,6 +15,7 @@ use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tauri::AppHandle;
 use tauri_specta::Event;
+use tracing::instrument;
 
 use crate::{
     events::ExportPdfEvent,
@@ -57,6 +58,7 @@ impl Drop for PdfMergeErrorEventGuard {
 }
 
 #[allow(clippy::cast_possible_truncation)]
+#[instrument(level = "error", skip_all, fields(comic_id = comic.id, comic_title = comic.name))]
 pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
     let downloaded_chapter_infos = get_downloaded_chapters(&comic.chapter_infos);
     let event_uuid = uuid::Uuid::new_v4().to_string();
@@ -86,17 +88,23 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
         .wrap_err(format!("创建目录`{}`失败", chapter_export_dir.display()))?;
     let chapter_with_pdf_path = Mutex::new(Vec::new());
     // 并发处理
+    let current_span = tracing::Span::current();
     let downloaded_chapter_infos = downloaded_chapter_infos.into_par_iter();
     downloaded_chapter_infos.try_for_each(|chapter_info| -> eyre::Result<()> {
-        let chapter_title = &chapter_info.chapter_title;
+        let _enter = current_span.enter();
+        let span = tracing::error_span!(
+            "export_pdf_rayon",
+            comic_id = comic.id,
+            comic_title = comic.name,
+            chapter_id = chapter_info.chapter_id,
+            chapter_title = chapter_info.chapter_title
+        );
+        let _enter = span.enter();
 
-        let chapter_download_dir =
-            chapter_info
-                .chapter_download_dir
-                .as_ref()
-                .ok_or_eyre(format!(
-                    "章节`{chapter_title}`的`chapter_download_dir`字段为`None`"
-                ))?;
+        let chapter_download_dir = chapter_info
+            .chapter_download_dir
+            .as_ref()
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
         let image_paths = get_image_paths(chapter_download_dir, true).wrap_err(format!(
             "获取`{}`中的图片失败",
             chapter_download_dir.display()
@@ -104,12 +112,11 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
 
         let chapter_download_dir_name = &chapter_info
             .get_chapter_download_dir_name()
-            .wrap_err(format!("章节`{chapter_title}`获取章节下载目录名失败"))?;
+            .wrap_err("获取章节下载目录名失败")?;
         // 创建pdf
         let save_path = chapter_export_dir.join(format!("{chapter_download_dir_name}.{extension}"));
 
-        create_pdf(image_paths, &save_path)
-            .wrap_err(format!("章节`{chapter_title}`创建pdf失败"))?;
+        create_pdf(image_paths, &save_path).wrap_err("创建pdf失败")?;
 
         chapter_with_pdf_path.lock().push((chapter_info, save_path));
         // 更新创建pdf的进度
@@ -172,6 +179,7 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> eyre::Result<()> {
 /// 用`image_paths`中的图片按顺序创建PDF，保存到`save_path`中
 #[allow(clippy::similar_names)]
 #[allow(clippy::cast_possible_truncation)]
+#[instrument(level = "error", skip_all, fields(pdf_path = %save_path.display()))]
 fn create_pdf(image_paths: Vec<PathBuf>, save_path: &Path) -> eyre::Result<()> {
     let mut doc = Document::with_version("1.5");
     let pages_id = doc.new_object_id();
@@ -247,6 +255,7 @@ fn create_pdf(image_paths: Vec<PathBuf>, save_path: &Path) -> eyre::Result<()> {
 }
 
 /// 读取`image_path`中的图片数据到buffer中
+#[instrument(level = "error", skip_all, fields(image_path = %image_path.display()))]
 fn read_image_to_buffer(image_path: &Path) -> eyre::Result<Vec<u8>> {
     let file =
         std::fs::File::open(image_path).wrap_err(format!("打开`{}`失败", image_path.display()))?;
@@ -260,6 +269,7 @@ fn read_image_to_buffer(image_path: &Path) -> eyre::Result<Vec<u8>> {
 
 /// 将`chapter_pdf_paths`中的PDF按顺序合并成一个，保存到`save_path`中
 #[allow(clippy::cast_possible_truncation)]
+#[instrument(level = "error", skip_all, fields(pdf_path = %save_path.display()))]
 fn merge_pdf(chapter_pdf_paths: Vec<PathBuf>, save_path: &Path) -> eyre::Result<()> {
     let mut doc = Document::with_version("1.5");
     let mut doc_page_ids = vec![];

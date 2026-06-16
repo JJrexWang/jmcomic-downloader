@@ -12,6 +12,7 @@ use parking_lot::RwLock;
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tokio::sync::Semaphore;
+use tracing::instrument;
 
 use crate::{
     config::Config,
@@ -66,6 +67,15 @@ impl DownloadManager {
         }
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = comic.id,
+            comic_title = comic.name,
+            chapter_id = chapter_id
+        )
+    )]
     pub fn create_download_task(&self, comic: Comic, chapter_id: i64) -> eyre::Result<()> {
         use DownloadTaskState::{Downloading, Paused, Pending};
 
@@ -100,6 +110,7 @@ impl DownloadManager {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(chapter_id = chapter_id))]
     pub fn pause_download_task(&self, chapter_id: i64) -> eyre::Result<()> {
         let tasks = self.download_tasks.read();
         let Some(task) = tasks.get(&chapter_id) else {
@@ -109,6 +120,7 @@ impl DownloadManager {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(chapter_id = chapter_id))]
     pub fn resume_download_task(&self, chapter_id: i64) -> eyre::Result<()> {
         let tasks = self.download_tasks.read();
         let Some(task) = tasks.get(&chapter_id) else {
@@ -118,6 +130,7 @@ impl DownloadManager {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all, fields(chapter_id = chapter_id))]
     pub fn delete_download_task(&self, chapter_id: i64) -> eyre::Result<()> {
         let mut tasks = self.download_tasks.write();
         let Some(task) = tasks.remove(&chapter_id) else {

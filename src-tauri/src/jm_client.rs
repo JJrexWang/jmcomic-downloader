@@ -17,6 +17,7 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::{Jitter, RetryTransientMiddleware};
 use serde_json::json;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::extensions::{AppHandleExt, EyreReportToMessage};
 use crate::responses::{
@@ -157,6 +158,7 @@ impl JmClient {
             .await
     }
 
+    #[instrument(level = "error", skip_all)]
     pub async fn login(
         &self,
         username: &str,
@@ -199,6 +201,7 @@ impl JmClient {
         Ok(user_profile)
     }
 
+    #[instrument(level = "error", skip_all)]
     pub async fn get_user_profile(&self) -> eyre::Result<GetUserProfileRespData> {
         let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         // 发送获取用户信息请求
@@ -238,6 +241,11 @@ impl JmClient {
         Ok(user_profile)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(keyword = keyword, page = page, sort = ?sort)
+    )]
     pub async fn search(
         &self,
         keyword: &str,
@@ -289,6 +297,7 @@ impl JmClient {
         ))
     }
 
+    #[instrument(level = "error", skip_all, fields(aid = aid))]
     pub async fn get_comic(&self, aid: i64) -> eyre::Result<GetComicRespData> {
         let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let query = json!({"id": aid,});
@@ -321,6 +330,7 @@ impl JmClient {
         Ok(comic)
     }
 
+    #[instrument(level = "error", skip_all, fields(chapter_id = id))]
     pub async fn get_chapter(&self, id: i64) -> eyre::Result<GetChapterRespData> {
         let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let query = json!({"id": id,});
@@ -353,6 +363,7 @@ impl JmClient {
         Ok(chapter)
     }
 
+    #[instrument(level = "error", skip_all, fields(chapter_id = id))]
     pub async fn get_scramble_id(&self, id: i64) -> eyre::Result<i64> {
         let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let query = json!({
@@ -383,6 +394,11 @@ impl JmClient {
         Ok(scramble_id)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(folder_id = folder_id, page = page, sort = ?sort)
+    )]
     pub async fn get_favorite_folder(
         &self,
         folder_id: i64,
@@ -426,6 +442,7 @@ impl JmClient {
         Ok(favorite)
     }
 
+    #[instrument(level = "error", skip_all)]
     pub async fn get_weekly_info(&self) -> eyre::Result<GetWeeklyInfoRespData> {
         let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let http_resp = self.jm_get(ApiPath::GetWeeklyInfo, None, ts).await?;
@@ -457,6 +474,11 @@ impl JmClient {
         Ok(weekly_info)
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(category_id = category_id, type_id = type_id)
+    )]
     pub async fn get_weekly(
         &self,
         category_id: &str,
@@ -496,6 +518,7 @@ impl JmClient {
         Ok(get_weekly_resp_data)
     }
 
+    #[instrument(level = "error", skip_all, fields(aid = aid))]
     pub async fn toggle_favorite_comic(&self, aid: i64) -> eyre::Result<ToggleFavoriteRespData> {
         let ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let form = json!({
@@ -534,6 +557,7 @@ impl JmClient {
         Ok(toggle_favorite_resp_data)
     }
 
+    #[instrument(level = "error", skip_all, fields(url = url))]
     pub async fn get_img_data_and_format(&self, url: &str) -> eyre::Result<(Bytes, ImageFormat)> {
         let request = self
             .img_client
@@ -545,7 +569,7 @@ impl JmClient {
         let status = http_resp.status();
         if status != StatusCode::OK {
             let text = http_resp.text().await?;
-            let err = eyre!("下载图片`{url}`失败，预料之外的状态码: {text}");
+            let err = eyre!("下载图片失败，预料之外的状态码: {text}");
             return Err(err);
         }
 
@@ -561,7 +585,7 @@ impl JmClient {
             let status = http_resp.status();
             if status != StatusCode::OK {
                 let text = http_resp.text().await?;
-                let err = eyre!("下载图片`{url}`失败，预料之外的状态码: {text}");
+                let err = eyre!("下载图片失败，预料之外的状态码: {text}");
                 return Err(err);
             }
 
