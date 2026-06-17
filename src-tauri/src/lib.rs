@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::downloader::download_manager::DownloadManager;
 use crate::errors::install_custom_eyre_handler;
 use crate::jm_client::JmClient;
+use crate::types::LogMetadata;
 
 mod commands;
 mod config;
@@ -72,7 +73,8 @@ pub fn run() {
             ExportCbzEvent,
             ExportPdfEvent,
             LogEvent,
-        ]);
+        ])
+        .typ::<LogMetadata>();
 
     #[cfg(debug_assertions)]
     builder
