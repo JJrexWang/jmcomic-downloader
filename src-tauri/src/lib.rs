@@ -11,6 +11,7 @@ use crate::commands::*;
 use crate::config::Config;
 use crate::downloader::download_manager::DownloadManager;
 use crate::errors::install_custom_eyre_handler;
+use crate::export::ComicExportLock;
 use crate::jm_client::JmClient;
 
 mod commands;
@@ -48,6 +49,7 @@ pub fn run() {
             get_weekly,
             get_user_profile,
             create_download_task,
+            create_download_tasks,
             pause_download_task,
             resume_download_task,
             delete_download_task,
@@ -59,6 +61,8 @@ pub fn run() {
             get_downloaded_comics,
             export_cbz,
             export_pdf,
+            export_cbz_chapters,
+            export_pdf_chapters,
             get_logs_dir_size,
             get_synced_comic,
             get_synced_comic_in_favorite,
@@ -111,6 +115,9 @@ pub fn run() {
 
             let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
+
+            let export_lock = ComicExportLock::new();
+            app.manage(export_lock);
 
             logger::init(app.handle())?;
 

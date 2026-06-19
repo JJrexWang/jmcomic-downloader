@@ -8,12 +8,19 @@ use tracing::instrument;
 
 use crate::{extensions::AppHandleExt, utils};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+use super::Comic;
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct ChapterInfo {
     pub chapter_id: i64,
     pub chapter_title: String,
     pub order: i64,
+    /// 是否曾导出过 PDF
+    pub is_pdf_exported: bool,
+    /// 是否曾导出过 CBZ
+    pub is_cbz_exported: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_downloaded: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,8 +66,8 @@ impl ChapterInfo {
     )]
     pub fn save_chapter_metadata(&self) -> eyre::Result<()> {
         let mut chapter_info = self.clone();
-        // 将is_downloaded和chapter_download_dir字段设置为None
-        // 这样能使这些字段在序列化时被忽略
+        // 将 is_downloaded 和 chapter_download_dir 字段设置为 None，
+        // 这样能使这些字段在序列化时被忽略。
         chapter_info.is_downloaded = None;
         chapter_info.chapter_download_dir = None;
 
@@ -80,6 +87,39 @@ impl ChapterInfo {
             .wrap_err(format!("写入文件`{}`失败", metadata_path.display()))?;
 
         Ok(())
+    }
+
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(
+            comic_id = comic.id,
+            comic_title = comic.name,
+            chapter_id = self.chapter_id,
+            chapter_title = self.chapter_title,
+            order = self.order
+        )
+    )]
+    pub fn get_chapter_relative_dir(&self, comic: &Comic) -> eyre::Result<PathBuf> {
+        let comic_download_dir = comic
+            .comic_download_dir
+            .as_ref()
+            .ok_or_eyre("`comic_download_dir`字段为`None`")?;
+
+        let chapter_download_dir = self
+            .chapter_download_dir
+            .as_ref()
+            .ok_or_eyre("`chapter_download_dir`字段为`None`")?;
+
+        let relative_dir = chapter_download_dir
+            .strip_prefix(comic_download_dir)
+            .wrap_err(format!(
+                "无法从路径`{}`中移除前缀`{}`",
+                chapter_download_dir.display(),
+                comic_download_dir.display()
+            ))?;
+
+        Ok(relative_dir.to_path_buf())
     }
 
     #[instrument(
@@ -108,14 +148,13 @@ impl ChapterInfo {
             .ok_or_eyre("DirFmtParams不是JSON对象")?;
 
         let vars: HashMap<String, String> = json_map
-            .into_iter()
+            .iter()
             .map(|(k, v)| {
-                let key = k.clone();
                 let value = match v {
                     serde_json::Value::String(s) => s.clone(),
                     _ => v.to_string(),
                 };
-                (key, value)
+                (k.clone(), value)
             })
             .collect();
 

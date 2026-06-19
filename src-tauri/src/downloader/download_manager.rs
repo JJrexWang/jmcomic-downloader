@@ -54,6 +54,63 @@ impl DownloadManager {
         manager
     }
 
+    #[instrument(
+        level = "error",
+        skip_all,
+        fields(comic_id = comic.id, comic_title = comic.name)
+    )]
+    pub fn create_download_tasks(&self, mut comic: Comic, chapter_ids: &[i64]) {
+        use DownloadTaskState::{Downloading, Paused, Pending};
+
+        if let Err(err) = comic.ensure_download_dir_fields(&self.app) {
+            let err_title = "批量创建下载任务失败";
+            let message = err.to_message();
+            tracing::error!(err_title, message);
+            return;
+        }
+
+        let mut tasks = self.download_tasks.write();
+        for chapter_id in chapter_ids {
+            let span = tracing::error_span!("create_download_task", chapter_id = chapter_id);
+            let _enter = span.enter();
+
+            if let Some(task) = tasks.get(chapter_id) {
+                let state = *task.state_sender.borrow();
+                if matches!(state, Pending | Downloading | Paused) {
+                    let err_title = "章节ID对应的下载任务创建失败";
+                    let message = eyre!("章节ID对应的下载任务已存在").to_message();
+                    tracing::error!(err_title, message);
+                    continue;
+                }
+            }
+
+            if let Some(task) = tasks.remove(chapter_id) {
+                if let Err(err) = task
+                    .delete_sender
+                    .send(())
+                    .wrap_err("章节ID对应的旧下载任务删除失败")
+                {
+                    let err_title = "章节ID对应的下载任务创建失败";
+                    let message = err.to_message();
+                    tracing::error!(err_title, message);
+                    continue;
+                }
+            }
+
+            let task = match DownloadTask::new(self.app.clone(), comic.clone(), *chapter_id) {
+                Ok(task) => task,
+                Err(err) => {
+                    let err_title = "章节ID对应的下载任务创建失败";
+                    let message = err.to_message();
+                    tracing::error!(err_title, message);
+                    continue;
+                }
+            };
+
+            tasks.insert(*chapter_id, task);
+        }
+    }
+
     async fn emit_download_speed_loop(app: AppHandle, byte_per_sec: Arc<AtomicU64>) {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
 

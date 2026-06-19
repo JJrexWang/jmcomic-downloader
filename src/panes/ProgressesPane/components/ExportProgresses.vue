@@ -4,6 +4,7 @@ import { computed, defineComponent, nextTick, onMounted, onUnmounted, PropType, 
 import { DropdownOption, NDropdown, NIcon, NProgress } from 'naive-ui'
 import { PhChecks, PhCircleNotch, PhFolderOpen, PhTrash } from '@phosphor-icons/vue'
 import { PartialSelectionOptions, SelectionArea, SelectionEvent } from '@viselect/vue'
+import { useStore } from '../../../store.ts'
 import IconButton from '../../../components/IconButton.vue'
 
 type ProgressState = 'Processing' | 'Error' | 'End'
@@ -18,8 +19,10 @@ export interface ProgressData {
   percentage: number
   indicator: string
   chapterExportDir?: string
+  comicId?: number
 }
 
+const store = useStore()
 const selectionOptions: PartialSelectionOptions = {
   selectables: '.selectable',
   features: { deselectOnBlur: true },
@@ -40,6 +43,32 @@ watchEffect(() => {
   }
 })
 
+async function syncPickedAndDownloadedComic(comicId: number) {
+  const pickedComic = store.pickedComic?.id === comicId ? store.pickedComic : undefined
+  const downloadedComic = store.downloadedComics.find((comic) => comic.id === comicId)
+
+  if (pickedComic === undefined && downloadedComic === undefined) {
+    return
+  }
+
+  const comic = pickedComic ?? downloadedComic
+  if (comic === undefined) {
+    return
+  }
+
+  const result = await commands.getSyncedComic(comic)
+  if (result.status !== 'ok') {
+    return
+  }
+
+  if (pickedComic !== undefined) {
+    Object.assign(pickedComic, result.data)
+  }
+  if (downloadedComic !== undefined) {
+    Object.assign(downloadedComic, result.data)
+  }
+}
+
 let unListenExportCbzEvent: undefined | (() => void)
 let unListenExportPdfEvent: undefined | (() => void)
 
@@ -56,7 +85,7 @@ onMounted(() => {
           current: 0,
           total,
           percentage: 0,
-          indicator: 'CBZ创建CBZ中',
+          indicator: 'CBZ创建中',
         })
       } else if (exportEvent.event === 'Progress') {
         const { uuid, current } = exportEvent.data
@@ -64,7 +93,7 @@ onMounted(() => {
         if (progressData !== undefined) {
           progressData.state = 'Processing'
           progressData.current = current
-          progressData.percentage = (current / progressData.total) * 100
+          progressData.percentage = progressData.total === 0 ? 100 : (current / progressData.total) * 100
           progressData.indicator = `CBZ创建中 ${current}/${progressData.total}`
         }
       } else if (exportEvent.event === 'Error') {
@@ -75,13 +104,17 @@ onMounted(() => {
           progressData.indicator = 'CBZ创建失败'
         }
       } else if (exportEvent.event === 'End') {
-        const { uuid, chapterExportDir } = exportEvent.data
+        const { uuid, comicId, chapterExportDir } = exportEvent.data
         const progressData = progresses.value.get(uuid)
         if (progressData !== undefined) {
           progressData.state = 'End'
+          progressData.current = progressData.total
+          progressData.percentage = 100
           progressData.chapterExportDir = chapterExportDir
+          progressData.comicId = comicId
           progressData.indicator = 'CBZ创建完成'
         }
+        await syncPickedAndDownloadedComic(comicId)
       }
     })
     .then((unListenFn) => {
@@ -108,7 +141,7 @@ onMounted(() => {
         if (progressData !== undefined) {
           progressData.state = 'Processing'
           progressData.current = current
-          progressData.percentage = (current / progressData.total) * 100
+          progressData.percentage = progressData.total === 0 ? 100 : (current / progressData.total) * 100
           progressData.indicator = `PDF创建中 ${current}/${progressData.total}`
         }
       } else if (exportEvent.event === 'CreateError') {
@@ -119,25 +152,38 @@ onMounted(() => {
           progressData.indicator = '创建PDF失败'
         }
       } else if (exportEvent.event === 'CreateEnd') {
-        const { uuid, chapterExportDir } = exportEvent.data
+        const { uuid, comicId, chapterExportDir } = exportEvent.data
         const progressData = progresses.value.get(uuid)
         if (progressData !== undefined) {
           progressData.state = 'End'
+          progressData.current = progressData.total
+          progressData.percentage = 100
           progressData.chapterExportDir = chapterExportDir
+          progressData.comicId = comicId
           progressData.indicator = 'PDF创建完成'
         }
+        await syncPickedAndDownloadedComic(comicId)
       } else if (exportEvent.event === 'MergeStart') {
-        const { uuid, comicTitle } = exportEvent.data
+        const { uuid, comicTitle, total } = exportEvent.data
         progresses.value.set(uuid, {
           uuid,
           exportType: 'pdf',
           state: 'Processing',
           comicTitle,
           current: 0,
-          total: 1,
+          total,
           percentage: 0,
           indicator: 'PDF合并中',
         })
+      } else if (exportEvent.event === 'MergeProgress') {
+        const { uuid, current } = exportEvent.data
+        const progressData = progresses.value.get(uuid)
+        if (progressData !== undefined) {
+          progressData.state = 'Processing'
+          progressData.current = current
+          progressData.percentage = progressData.total === 0 ? 100 : (current / progressData.total) * 100
+          progressData.indicator = `PDF合并中 ${current}/${progressData.total}`
+        }
       } else if (exportEvent.event === 'MergeError') {
         const { uuid } = exportEvent.data
         const progressData = progresses.value.get(uuid)
@@ -146,13 +192,14 @@ onMounted(() => {
           progressData.indicator = 'PDF合并失败'
         }
       } else if (exportEvent.event === 'MergeEnd') {
-        const { uuid, chapterExportDir } = exportEvent.data
+        const { uuid, comicId, chapterExportDir } = exportEvent.data
         const progressData = progresses.value.get(uuid)
         if (progressData !== undefined) {
           progressData.state = 'End'
           progressData.current = progressData.total
           progressData.percentage = 100
           progressData.chapterExportDir = chapterExportDir
+          progressData.comicId = comicId
           progressData.indicator = 'PDF合并完成'
         }
       }
@@ -197,7 +244,7 @@ function useDropdown() {
   const dropdownOptions: DropdownOption[] = [
     {
       label: '全选',
-      key: 'check all',
+      key: 'check-all',
       icon: () => (
         <NIcon size="20">
           <PhChecks />

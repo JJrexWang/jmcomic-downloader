@@ -1,7 +1,10 @@
 use parking_lot::RwLock;
 use tauri::{Manager, State};
 
-use crate::{config::Config, downloader::download_manager::DownloadManager, jm_client::JmClient};
+use crate::{
+    config::Config, downloader::download_manager::DownloadManager, export::ComicExportLock,
+    jm_client::JmClient,
+};
 
 pub trait EyreReportToMessage {
     fn to_message(&self) -> String;
@@ -69,6 +72,7 @@ pub trait AppHandleExt {
     fn get_config(&self) -> State<'_, RwLock<Config>>;
     fn get_jm_client(&self) -> State<'_, JmClient>;
     fn get_download_manager(&self) -> State<'_, DownloadManager>;
+    fn get_export_lock(&self) -> State<'_, ComicExportLock>;
 }
 
 impl AppHandleExt for tauri::AppHandle {
@@ -80,5 +84,8 @@ impl AppHandleExt for tauri::AppHandle {
     }
     fn get_download_manager(&self) -> State<'_, DownloadManager> {
         self.state::<DownloadManager>()
+    }
+    fn get_export_lock(&self) -> State<'_, ComicExportLock> {
+        self.state::<ComicExportLock>()
     }
 }

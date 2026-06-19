@@ -1,10 +1,10 @@
+use std::sync::Arc;
+use std::time::Duration;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::PathBuf,
 };
-use std::sync::Arc;
-use std::time::Duration;
 
 // TODO: 用`#![allow(clippy::used_underscore_binding)]`来消除警告
 use eyre::{eyre, WrapErr};
@@ -236,6 +236,16 @@ pub fn create_download_task(app: AppHandle, comic: Comic, chapter_id: i64) -> Co
         .create_download_task(comic, chapter_id)
         .map_err(|err| CommandError::from("创建下载任务失败", err))?;
     Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+#[specta::specta]
+#[instrument(level = "error", skip_all, fields(comic_id = comic.id, comic_title = comic.name))]
+pub fn create_download_tasks(app: AppHandle, comic: Comic, chapter_ids: Vec<i64>) {
+    let download_manager = app.get_download_manager();
+
+    download_manager.create_download_tasks(comic, &chapter_ids);
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -688,6 +698,36 @@ pub fn export_cbz(app: AppHandle, comic: Comic) -> CommandResult<()> {
 #[instrument(level = "error", skip_all, fields(comic_id = comic.id, comic_title = comic.name))]
 pub fn export_pdf(app: AppHandle, comic: Comic) -> CommandResult<()> {
     export::pdf(&app, &comic).map_err(|err| CommandError::from("导出pdf失败", err))?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+#[allow(clippy::needless_pass_by_value)]
+pub fn export_cbz_chapters(
+    app: AppHandle,
+    comic: Comic,
+    chapter_ids: Vec<i64>,
+) -> CommandResult<()> {
+    let comic_title = comic.name.clone();
+    export::cbz_chapters(&app, &comic, chapter_ids)
+        .wrap_err(format!("漫画`{comic_title}`导出指定章节cbz失败"))
+        .map_err(|err| CommandError::from("导出指定章节cbz失败", err))?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+#[allow(clippy::needless_pass_by_value)]
+pub fn export_pdf_chapters(
+    app: AppHandle,
+    comic: Comic,
+    chapter_ids: Vec<i64>,
+) -> CommandResult<()> {
+    let comic_title = comic.name.clone();
+    export::pdf_chapters(&app, &comic, chapter_ids)
+        .wrap_err(format!("漫画`{comic_title}`导出指定章节pdf失败"))
+        .map_err(|err| CommandError::from("导出指定章节pdf失败", err))?;
     Ok(())
 }
 

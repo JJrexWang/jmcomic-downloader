@@ -4,7 +4,7 @@ import { commands, events } from '../../bindings.ts'
 import { open } from '@tauri-apps/plugin-dialog'
 import { PhFolderOpen, PhGearSix } from '@phosphor-icons/vue'
 import { useStore } from '../../store.ts'
-import SettingsDialog from '../../dialogs/SettingsDialog.vue'
+import SettingsDialog from '../../dialogs/SettingsDialog/SettingsDialog.vue'
 import UncompletedProgresses from './components/UncompletedProgresses.vue'
 import CompletedProgresses from './components/CompletedProgresses.vue'
 import { ProgressData } from '../../types.ts'
@@ -97,7 +97,7 @@ async function syncPickedComic() {
     console.error(result.error)
     return
   }
-  store.pickedComic = result.data
+  Object.assign(store.pickedComic, result.data)
 }
 
 async function syncComicInSearch(progressData: ProgressData) {
@@ -113,7 +113,7 @@ async function syncComicInSearch(progressData: ProgressData) {
     console.error(result.error)
     return
   }
-  Object.assign(comic, { ...result.data })
+  Object.assign(comic, result.data)
 }
 
 async function syncComicInFavorite(progressData: ProgressData) {
@@ -129,7 +129,7 @@ async function syncComicInFavorite(progressData: ProgressData) {
     console.error(result.error)
     return
   }
-  Object.assign(comic, { ...result.data })
+  Object.assign(comic, result.data)
 }
 
 async function syncComicInWeekly(progressData: ProgressData) {
@@ -145,7 +145,7 @@ async function syncComicInWeekly(progressData: ProgressData) {
     console.error(result.error)
     return
   }
-  Object.assign(comic, { ...result.data })
+  Object.assign(comic, result.data)
 }
 
 async function showDownloadDirInFileManager() {
