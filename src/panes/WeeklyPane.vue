@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { GetWeeklyInfoRespData, commands } from '../bindings.ts'
-import { SelectProps } from 'naive-ui'
+import { NSelect, NTabPane, NTabs, SelectProps } from 'naive-ui'
 import ComicCard from '../components/ComicCard.vue'
 import { useStore } from '../store.ts'
 

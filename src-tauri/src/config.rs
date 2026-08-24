@@ -33,10 +33,14 @@ pub struct Config {
     pub api_domain_mode: ApiDomainMode,
     pub custom_api_domain: String,
     pub should_download_cover: bool,
+    pub create_pdf_concurrency: usize,
+    pub enable_merge_pdf: bool,
+    /// 导出跳过模式
+    pub export_skip_mode: ExportSkipMode,
 }
 
 impl Config {
-    pub fn new(app: &AppHandle) -> anyhow::Result<Self> {
+    pub fn new(app: &AppHandle) -> eyre::Result<Self> {
         let app_data_dir = app.path().app_data_dir()?;
         let config_path = app_data_dir.join("config.json");
 
@@ -56,7 +60,7 @@ impl Config {
         Ok(config)
     }
 
-    pub fn save(&self, app: &AppHandle) -> anyhow::Result<()> {
+    pub fn save(&self, app: &AppHandle) -> eyre::Result<()> {
         let resource_dir = app.path().app_data_dir()?;
         let config_path = resource_dir.join("config.json");
         let config_string = serde_json::to_string_pretty(self)?;
@@ -98,6 +102,10 @@ impl Config {
     }
 
     fn default(app_data_dir: &Path) -> Config {
+        let cpu_core_num = std::thread::available_parallelism()
+            .map(std::num::NonZero::get)
+            .unwrap_or(1);
+
         Config {
             username: String::new(),
             password: String::new(),
@@ -118,6 +126,9 @@ impl Config {
             api_domain_mode: ApiDomainMode::Domain2,
             custom_api_domain: API_DOMAIN_2.to_string(),
             should_download_cover: true,
+            create_pdf_concurrency: cpu_core_num,
+            enable_merge_pdf: true,
+            export_skip_mode: ExportSkipMode::default(),
         }
     }
 }
@@ -131,4 +142,16 @@ pub enum ApiDomainMode {
     Domain4,
     Domain5,
     Custom,
+}
+
+/// 导出跳过模式
+#[derive(Default, Debug, Copy, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub enum ExportSkipMode {
+    /// 每次重新导出所有章节
+    #[default]
+    None,
+    /// 跳过本地已存在的导出文件
+    SkipExisting,
+    /// 跳过曾导出过的章节（即使本地文件已删除）
+    SkipExported,
 }

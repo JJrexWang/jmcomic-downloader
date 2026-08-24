@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useStore } from '../store.ts'
 import { commands, DownloadAllFavoritesEvent, events } from '../bindings.ts'
-import { MessageReactive, useMessage } from 'naive-ui'
+import { MessageReactive, NButton, NPopconfirm, useMessage } from 'naive-ui'
 
 const store = useStore()
 

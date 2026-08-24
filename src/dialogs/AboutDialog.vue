@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { getVersion } from '@tauri-apps/api/app'
 import { ref, onMounted } from 'vue'
+import { NA, NDialog, NModal } from 'naive-ui'
 import icon from '../../src-tauri/icons/128x128.png'
 
 const showing = defineModel<boolean>('showing', { required: true })

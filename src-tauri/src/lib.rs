@@ -1,20 +1,22 @@
-use anyhow::Context;
 use events::{
-    DownloadAllFavoritesEvent, DownloadSleepingEvent, DownloadSpeedEvent, DownloadTaskEvent,
-    ExportCbzEvent, ExportPdfEvent, LogEvent, UpdateDownloadedComicsEvent,
+    DownloadAllFavoritesEvent, DownloadEvent, ExportCbzEvent, ExportPdfEvent, LogEvent,
+    UpdateDownloadedComicsEvent,
 };
+use eyre::WrapErr;
 use parking_lot::RwLock;
 use tauri::{Manager, Wry};
 
 // TODO: 用prelude来消除警告
 use crate::commands::*;
 use crate::config::Config;
-use crate::download_manager::DownloadManager;
+use crate::downloader::download_manager::DownloadManager;
+use crate::errors::install_custom_eyre_handler;
+use crate::export::ComicExportLock;
 use crate::jm_client::JmClient;
 
 mod commands;
 mod config;
-mod download_manager;
+mod downloader;
 mod errors;
 mod events;
 mod export;
@@ -32,6 +34,8 @@ fn generate_context() -> tauri::Context<Wry> {
 // TODO: 添加Panic Doc
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_custom_eyre_handler().unwrap();
+
     let builder = tauri_specta::Builder::<Wry>::new()
         .commands(tauri_specta::collect_commands![
             greet,
@@ -45,9 +49,10 @@ pub fn run() {
             get_weekly,
             get_user_profile,
             create_download_task,
+            create_download_tasks,
             pause_download_task,
             resume_download_task,
-            cancel_download_task,
+            delete_download_task,
             download_comic,
             download_all_favorites,
             update_downloaded_comics,
@@ -56,16 +61,17 @@ pub fn run() {
             get_downloaded_comics,
             export_cbz,
             export_pdf,
+            export_cbz_chapters,
+            export_pdf_chapters,
             get_logs_dir_size,
             get_synced_comic,
             get_synced_comic_in_favorite,
             get_synced_comic_in_search,
             get_synced_comic_in_weekly,
+            open_log_file,
         ])
         .events(tauri_specta::collect_events![
-            DownloadSpeedEvent,
-            DownloadSleepingEvent,
-            DownloadTaskEvent,
+            DownloadEvent,
             DownloadAllFavoritesEvent,
             UpdateDownloadedComicsEvent,
             ExportCbzEvent,
@@ -94,9 +100,9 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .context("failed to get app data dir")?;
+                .wrap_err("failed to get app data dir")?;
 
-            std::fs::create_dir_all(&app_data_dir).context(format!(
+            std::fs::create_dir_all(&app_data_dir).wrap_err(format!(
                 "failed to create app data dir: {}",
                 app_data_dir.display()
             ))?;
@@ -107,8 +113,11 @@ pub fn run() {
             let jm_client = JmClient::new(app.handle().clone());
             app.manage(jm_client);
 
-            let download_manager = DownloadManager::new(app.handle().clone());
+            let download_manager = DownloadManager::new(app.handle());
             app.manage(download_manager);
+
+            let export_lock = ComicExportLock::new();
+            app.manage(export_lock);
 
             logger::init(app.handle())?;
 

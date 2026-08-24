@@ -1,9 +1,9 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{
     responses::{string_to_i64, ComicInWeeklyRespData, GetWeeklyRespData},
@@ -18,9 +18,9 @@ pub struct GetWeeklyResult {
 }
 
 impl GetWeeklyResult {
-    pub fn from_resp_data(app: &AppHandle, resp_data: GetWeeklyRespData) -> anyhow::Result<Self> {
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).context("创建漫画ID到下载目录映射失败")?;
+    #[instrument(level = "error", skip_all)]
+    pub fn from_resp_data(app: &AppHandle, resp_data: GetWeeklyRespData) -> eyre::Result<Self> {
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         let list = resp_data
             .list

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MessageReactive, useMessage } from 'naive-ui'
+import { MessageReactive, NButton, NPopconfirm, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { commands, events, UpdateDownloadedComicsEvent } from '../../../bindings.ts'
 import { useStore } from '../../../store.ts'

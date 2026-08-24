@@ -1,26 +1,18 @@
 use parking_lot::RwLock;
 use tauri::{Manager, State};
 
-use crate::{config::Config, download_manager::DownloadManager, jm_client::JmClient};
+use crate::{
+    config::Config, downloader::download_manager::DownloadManager, export::ComicExportLock,
+    jm_client::JmClient,
+};
 
-pub trait AnyhowErrorToStringChain {
-    /// 将 `anyhow::Error` 转换为chain格式
-    /// # Example
-    /// 0: error message
-    /// 1: error message
-    /// 2: error message
-    fn to_string_chain(&self) -> String;
+pub trait EyreReportToMessage {
+    fn to_message(&self) -> String;
 }
 
-impl AnyhowErrorToStringChain for anyhow::Error {
-    fn to_string_chain(&self) -> String {
-        use std::fmt::Write;
-        self.chain()
-            .enumerate()
-            .fold(String::new(), |mut output, (i, e)| {
-                let _ = writeln!(output, "{i}: {e}");
-                output
-            })
+impl EyreReportToMessage for eyre::Report {
+    fn to_message(&self) -> String {
+        format!("{self:?}")
     }
 }
 
@@ -77,19 +69,23 @@ impl WalkDirEntryExt for walkdir::DirEntry {
 }
 
 pub trait AppHandleExt {
-    fn get_config(&self) -> State<RwLock<Config>>;
-    fn get_jm_client(&self) -> State<JmClient>;
-    fn get_download_manager(&self) -> State<DownloadManager>;
+    fn get_config(&self) -> State<'_, RwLock<Config>>;
+    fn get_jm_client(&self) -> State<'_, JmClient>;
+    fn get_download_manager(&self) -> State<'_, DownloadManager>;
+    fn get_export_lock(&self) -> State<'_, ComicExportLock>;
 }
 
 impl AppHandleExt for tauri::AppHandle {
-    fn get_config(&self) -> State<RwLock<Config>> {
+    fn get_config(&self) -> State<'_, RwLock<Config>> {
         self.state::<RwLock<Config>>()
     }
-    fn get_jm_client(&self) -> State<JmClient> {
+    fn get_jm_client(&self) -> State<'_, JmClient> {
         self.state::<JmClient>()
     }
-    fn get_download_manager(&self) -> State<DownloadManager> {
+    fn get_download_manager(&self) -> State<'_, DownloadManager> {
         self.state::<DownloadManager>()
+    }
+    fn get_export_lock(&self) -> State<'_, ComicExportLock> {
+        self.state::<ComicExportLock>()
     }
 }

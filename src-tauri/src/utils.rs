@@ -1,7 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Context;
+use eyre::{OptionExt, WrapErr};
 use tauri::AppHandle;
+use tracing::instrument;
 use walkdir::WalkDir;
 
 use crate::{
@@ -34,7 +35,8 @@ pub fn md5_hex(data: &str) -> String {
     format!("{:x}", md5::compute(data))
 }
 
-pub fn create_id_to_dir_map(app: &AppHandle) -> anyhow::Result<HashMap<i64, PathBuf>> {
+#[instrument(level = "error", skip_all)]
+pub fn create_id_to_dir_map(app: &AppHandle) -> eyre::Result<HashMap<i64, PathBuf>> {
     let mut id_to_dir_map: HashMap<i64, PathBuf> = HashMap::new();
     let download_dir = app.get_config().read().download_dir.clone();
     if !download_dir.exists() {
@@ -51,25 +53,26 @@ pub fn create_id_to_dir_map(app: &AppHandle) -> anyhow::Result<HashMap<i64, Path
         }
 
         let metadata_str =
-            std::fs::read_to_string(path).context(format!("读取`{}`失败", path.display()))?;
-        let comic_json: serde_json::Value = serde_json::from_str(&metadata_str).context(
+            std::fs::read_to_string(path).wrap_err(format!("读取`{}`失败", path.display()))?;
+        let comic_json: serde_json::Value = serde_json::from_str(&metadata_str).wrap_err(
             format!("将`{}`反序列化为serde_json::Value失败", path.display()),
         )?;
         let id = comic_json
             .get("id")
             .and_then(serde_json::Value::as_i64)
-            .context(format!("`{}`没有`id`字段", path.display()))?;
+            .ok_or_eyre(format!("`{}`没有`id`字段", path.display()))?;
 
         let parent = path
             .parent()
-            .context(format!("`{}`没有父目录", path.display()))?;
+            .ok_or_eyre(format!("`{}`没有父目录", path.display()))?;
 
         id_to_dir_map.entry(id).or_insert(parent.to_path_buf());
     }
     Ok(id_to_dir_map)
 }
 
-pub async fn get_comic(app: AppHandle, aid: i64) -> anyhow::Result<Comic> {
+#[instrument(level = "error", skip_all, fields(aid = aid))]
+pub async fn get_comic(app: AppHandle, aid: i64) -> eyre::Result<Comic> {
     let jm_client = app.get_jm_client();
 
     let comic_resp_data = jm_client.get_comic(aid).await?;

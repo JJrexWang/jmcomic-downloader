@@ -1,9 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Context;
+use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tracing::instrument;
 
 use crate::{
     responses::{
@@ -26,7 +27,7 @@ impl SearchResultVariant {
     pub fn from_search_resp(
         app: &AppHandle,
         search_resp: SearchResp,
-    ) -> anyhow::Result<SearchResultVariant> {
+    ) -> eyre::Result<SearchResultVariant> {
         match search_resp {
             SearchResp::SearchRespData(search_resp_data) => {
                 let search_result = SearchResult::from_resp_data(app, search_resp_data)?;
@@ -49,18 +50,18 @@ pub struct SearchResult {
 }
 
 impl SearchResult {
+    #[instrument(level = "error", skip_all)]
     pub fn from_resp_data(
         app: &AppHandle,
         search_resp_data: SearchRespData,
-    ) -> anyhow::Result<SearchResult> {
-        let id_to_dir_map =
-            utils::create_id_to_dir_map(app).context("创建漫画ID到下载目录映射失败")?;
+    ) -> eyre::Result<SearchResult> {
+        let id_to_dir_map = utils::create_id_to_dir_map(app)?;
 
         let content = search_resp_data
             .content
             .into_iter()
             .map(|comic| ComicInSearch::from_resp_data(comic, &id_to_dir_map))
-            .collect::<anyhow::Result<_>>()?;
+            .collect::<eyre::Result<_>>()?;
 
         let search_result = SearchResult {
             search_query: search_resp_data.search_query,
@@ -92,8 +93,8 @@ impl ComicInSearch {
     pub fn from_resp_data(
         resp_data: ComicInSearchRespData,
         id_to_dir_map: &HashMap<i64, PathBuf>,
-    ) -> anyhow::Result<ComicInSearch> {
-        let id: i64 = resp_data.id.parse().context("将id解析为i64失败")?;
+    ) -> eyre::Result<ComicInSearch> {
+        let id: i64 = resp_data.id.parse().wrap_err("将id解析为i64失败")?;
 
         let mut comic = ComicInSearch {
             id,

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { commands, FavoriteSort } from '../bindings.ts'
-import { useMessage } from 'naive-ui'
+import { NButton, NPagination, NSelect, NTooltip, SelectProps, useMessage } from 'naive-ui'
 import ComicCard from '../components/ComicCard.vue'
-import { SelectProps } from 'naive-ui'
 import { useStore } from '../store.ts'
 import DownloadAllFavoriteButton from '../components/DownloadAllFavoriteButton.vue'
 
